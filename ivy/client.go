@@ -1,5 +1,9 @@
 package ivy
 
+import (
+	"6.5840-dsm/labrpc"
+)
+
 type Page struct {
 	id     int
 	data   []byte
@@ -13,6 +17,7 @@ type Client struct {
 
 func (c *Client) readPage(pageID int) []byte {
 	// check locally first, send request to central if necessary
+	return make([]byte, 0)
 }
 
 func (c *Client) sendReadRequest() {
@@ -36,6 +41,6 @@ func (c *Client) handleInvalidate() {
 
 }
 
-func (c *Client) initialize() {
-
+func (c *Client) initialize(server *labrpc.ClientEnd) {
+	ok := server.Call("KVServer.Get", &args, &reply)
 }
