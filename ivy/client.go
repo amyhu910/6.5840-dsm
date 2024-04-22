@@ -45,7 +45,7 @@ type AccessReply struct {
 
 func (c *Client) readPage(pageID int) []byte {
 	// check locally first, send request to central if necessary
-	if page, ok := c.pagetable[pageID]; ok && page.access == 0 {
+	if page, ok := c.pagetable[pageID]; ok && page.access != 0 {
 		return c.pagetable[pageID].data
 	} else {
 		return c.sendReadRequest(pageID)
@@ -58,6 +58,7 @@ func (c *Client) sendReadRequest(pageID int) []byte {
 	if !ok {
 		return nil
 	}
+	c.pagetable[pageID] = Page{id: pageID, data: reply.Data, access: 1}
 	return reply.Data
 }
 
