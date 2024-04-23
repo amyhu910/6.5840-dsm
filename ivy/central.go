@@ -12,7 +12,7 @@ type Central struct {
 	clients map[int]*labrpc.ClientEnd
 	copyset map[int]map[int]int
 	owner   map[int]int
-	locks   map[int]*sync.Mutex
+	locks   map[int]*sync.Mutex //I think we don't need to use references for mutexes: https://www.reddit.com/r/golang/comments/u9o5wj/mutex_struct_field_as_reference_or_value/
 	mu      sync.Mutex
 	dead    int32 // for testing
 }
@@ -43,7 +43,7 @@ func (c *Central) handleReadWrite(args *ReadWriteArgs, reply *ReadWriteReply) {
 		if _, ok := c.copyset[args.PageID]; !ok {
 			c.copyset[args.PageID] = make(map[int]int)
 		}
-		c.copyset[args.PageID][args.ClientID] = 1
+		c.copyset[args.PageID][args.ClientID] = 1 // TODO: Is the reason we use a map here because it's a "set"?
 		reply.Err = OK
 		reply.Data = data
 		c.locks[args.PageID].Unlock()
@@ -81,6 +81,7 @@ func (c *Central) makeInvalid(pageID int, clientID int) {
 	reply := AccessReply{}
 	ok := c.clients[clientID].Call("Client.ChangeAccess", &args, &reply)
 	for !ok {
+		// Wait until expires
 		ok = c.clients[clientID].Call("Client.ChangeAccess", &args, &reply)
 	}
 	c.lockPage(pageID)
@@ -99,11 +100,13 @@ func (c *Central) makeReadOnly(pageID int) []byte {
 	c.locks[pageID].Unlock()
 	ok := c.clients[clientID].Call("Client.ChangeAccess", &args, &reply)
 	for !ok {
+		// Modify to account for leases
 		ok = c.clients[clientID].Call("Client.ChangeAccess", &args, &reply)
 	}
 	c.lockPage(pageID)
 	defer c.locks[pageID].Unlock()
 	c.owner[pageID] = -1
+	// Add owner to the copyset
 	return reply.Data
 }
 

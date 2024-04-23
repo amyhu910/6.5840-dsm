@@ -72,6 +72,7 @@ func (c *Client) readPage(pageID int) []byte {
 }
 
 func (c *Client) lockPage(pageID int) {
+	// Would it be better for us to group the lock into the pagetable Page instead to save some locking/unlocking of the c.mu?
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if _, ok := c.locks[pageID]; !ok {
@@ -93,6 +94,7 @@ func (c *Client) sendReadRequest(pageID int) []byte {
 	} else {
 		page := c.pagetable[pageID]
 		page.data = reply.Data
+		// TODO: Do we want to also change the page access from 0 to 1?
 		c.pagetable[pageID] = page
 	}
 	return reply.Data
@@ -116,6 +118,7 @@ func (c *Client) writePage(pageID int, data []byte) {
 			} else {
 				page := c.pagetable[pageID]
 				page.data = data
+				// TODO: Probably also want to update page access here?
 				c.pagetable[pageID] = page
 			}
 		}
