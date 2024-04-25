@@ -3,15 +3,32 @@ package ivy
 import (
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"6.5840-dsm/labrpc"
 )
+
+const (
+	LeaseDuration = 10 * time.Second
+)
+
+type Lease struct {
+	Owner int
+	Valid bool
+	Start time.Time
+}
+
+type Owner struct {
+	OwnerID    int
+	AccessType int
+	Lease      Lease
+}
 
 type Central struct {
 	// The central's name
 	clients map[int]*labrpc.ClientEnd
 	copyset map[int]map[int]int
-	owner   map[int]int
+	owner   map[int]Owner
 	locks   map[int]*sync.Mutex //I think we don't need to use references for mutexes: https://www.reddit.com/r/golang/comments/u9o5wj/mutex_struct_field_as_reference_or_value/
 	mu      sync.Mutex
 	dead    int32 // for testing
@@ -38,23 +55,25 @@ func (c *Central) lockPage(pageID int) {
 
 func (c *Central) handleReadWrite(args *ReadWriteArgs, reply *ReadWriteReply) {
 	if args.Access == 1 {
-		data := c.makeReadOnly(args.PageID)
 		c.lockPage(args.PageID)
 		if _, ok := c.copyset[args.PageID]; !ok {
 			c.copyset[args.PageID] = make(map[int]int)
 		}
-		c.copyset[args.PageID][args.ClientID] = 1 // TODO: Is the reason we use a map here because it's a "set"?
+		c.copyset[args.PageID][args.ClientID] += 1 // TODO: Is the reason we use a map here because it's a "set"? yes
 		reply.Err = OK
-		reply.Data = data
+		reply.Owner = c.owner[args.PageID].OwnerID
 		c.locks[args.PageID].Unlock()
 	} else if args.Access == 2 {
 		c.invalidateCaches(args.PageID)
 		c.locks[args.PageID].Lock()
-		for len(c.copyset[args.PageID]) > 0 {
+		for len(c.copyset[args.PageID]) > 0 || time.Now().Before(c.owner[args.PageID].Lease.Start.Add(LeaseDuration)) {
 			c.locks[args.PageID].Unlock()
 			c.locks[args.PageID].Lock()
 		}
-		c.owner[args.PageID] = args.ClientID
+		reply.Err = OK
+		reply.Owner = c.owner[args.PageID].OwnerID
+		newLease := Lease{Owner: args.ClientID, Valid: true, Start: time.Now()}
+		c.owner[args.PageID] = Owner{OwnerID: args.ClientID, AccessType: 2, Lease: newLease}
 		c.locks[args.PageID].Unlock()
 	}
 }
@@ -66,10 +85,8 @@ func (c *Central) invalidateCaches(pageID int) {
 	if !ok || len(copyset) == 0 {
 		return
 	}
-
-	ownerID, hasOwner := c.owner[pageID]
-	if hasOwner && ownerID != -1 {
-		go c.makeInvalid(pageID, ownerID)
+	if owner, ok := c.owner[pageID]; ok && owner.Lease.Valid {
+		go c.makeInvalid(pageID, owner.OwnerID)
 	}
 	for clientID, _ := range copyset {
 		go c.makeInvalid(pageID, clientID)
@@ -77,8 +94,8 @@ func (c *Central) invalidateCaches(pageID int) {
 }
 
 func (c *Central) makeInvalid(pageID int, clientID int) {
-	args := AccessArgs{PageID: pageID, NewAccess: 0}
-	reply := AccessReply{}
+	args := InvalidateArgs{PageID: pageID, NewAccess: 0, ReturnPage: false}
+	reply := InvalidateReply{}
 	ok := c.clients[clientID].Call("Client.ChangeAccess", &args, &reply)
 	for !ok {
 		// Wait until expires
@@ -89,31 +106,10 @@ func (c *Central) makeInvalid(pageID int, clientID int) {
 	c.locks[pageID].Unlock()
 }
 
-func (c *Central) makeReadOnly(pageID int) []byte {
-	c.lockPage(pageID)
-	clientID, hasOwner := c.owner[pageID]
-	if !hasOwner || clientID == -1 {
-		return nil
-	}
-	args := AccessArgs{PageID: pageID, NewAccess: 1}
-	reply := AccessReply{}
-	c.locks[pageID].Unlock()
-	ok := c.clients[clientID].Call("Client.ChangeAccess", &args, &reply)
-	for !ok {
-		// Modify to account for leases
-		ok = c.clients[clientID].Call("Client.ChangeAccess", &args, &reply)
-	}
-	c.lockPage(pageID)
-	defer c.locks[pageID].Unlock()
-	c.owner[pageID] = -1
-	// Add owner to the copyset
-	return reply.Data
-}
-
 func (c *Central) initialize() {
 	c.clients = make(map[int]*labrpc.ClientEnd)
 	c.copyset = make(map[int]map[int]int)
-	c.owner = make(map[int]int)
+	c.owner = make(map[int]Owner)
 }
 
 func (c *Central) registerClient(client *labrpc.ClientEnd, clientID int) {
