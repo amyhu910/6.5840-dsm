@@ -5,8 +5,6 @@ import (
 	"net"
 	"net/rpc"
 	"sync/atomic"
-
-	"6.5840-dsm/labrpc"
 )
 
 // const (
@@ -26,7 +24,7 @@ type Owner struct {
 
 type Central struct {
 	// The central's name
-	clients map[int]*labrpc.ClientEnd
+	clients map[int]*rpc.Client
 	copyset map[uintptr]map[int]int
 	owner   map[uintptr]Owner
 	// locks   map[int]*sync.Mutex //I think we don't need to use references for mutexes: https://www.reddit.com/r/golang/comments/u9o5wj/mutex_struct_field_as_reference_or_value/
@@ -95,25 +93,31 @@ func (c *Central) invalidateCaches(pageID uintptr) {
 func (c *Central) makeInvalid(addr uintptr, clientID int) {
 	args := InvalidateArgs{Addr: addr, NewAccess: 0, ReturnPage: false}
 	reply := InvalidateReply{}
-	ok := c.clients[clientID].Call("Client.ChangeAccess", &args, &reply)
-	for !ok {
+	err := c.clients[clientID].Call("Client.ChangeAccess", &args, &reply)
+	for err != nil {
 		// Wait until expires
-		ok = c.clients[clientID].Call("Client.ChangeAccess", &args, &reply)
+		err = c.clients[clientID].Call("Client.ChangeAccess", &args, &reply)
 	}
 	delete(c.copyset[addr], clientID)
 }
 
-func (c *Central) initialize() {
-	c.clients = make(map[int]*labrpc.ClientEnd)
+func (c *Central) initialize(clients map[int]string) {
+	c.clients = make(map[int]*rpc.Client)
+	for id, addr := range clients {
+		peer, err := rpc.Dial("tcp", addr)
+		if err != nil {
+			log.Fatal("could not connect to peer", err)
+		}
+		c.clients[id] = peer
+	}
 	c.copyset = make(map[uintptr]map[int]int)
 	c.owner = make(map[uintptr]Owner)
 	go c.initializeRPC()
 }
 
-func MakeCentral() *Central {
+func MakeCentral(clients map[int]string) *Central {
 	c := &Central{}
-	c.initialize()
-	labrpc.MakeService(c)
+	c.initialize(clients)
 	return c
 }
 
