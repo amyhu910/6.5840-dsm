@@ -9,13 +9,13 @@ type ReadWriteArgs struct {
 type ReadWriteReply struct {
 	Err   Err
 	Owner int
-	Lease Lease
+	// Lease Lease
 }
 
 type PageRequestArgs struct {
 	Addr        uintptr
 	RequestType int
-	Lease       Lease
+	// Lease       Lease
 }
 
 type PageRequestReply struct {

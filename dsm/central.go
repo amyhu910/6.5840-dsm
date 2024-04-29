@@ -1,22 +1,23 @@
 package dsm_go
 
 import (
-	"sync"
+	"log"
+	"net"
+	"net/rpc"
 	"sync/atomic"
-	"time"
 
 	"6.5840-dsm/labrpc"
 )
 
-const (
-	LeaseDuration = 10 * time.Second
-)
+// const (
+// 	LeaseDuration = 10 * time.Second
+// )
 
-type Lease struct {
-	Owner int
-	Valid bool
-	Start time.Time
-}
+// type Lease struct {
+// 	Owner int
+// 	Valid bool
+// 	Start time.Time
+// }
 
 type Owner struct {
 	OwnerID    int
@@ -28,9 +29,9 @@ type Central struct {
 	clients map[int]*labrpc.ClientEnd
 	copyset map[uintptr]map[int]int
 	owner   map[uintptr]Owner
-	locks   map[int]*sync.Mutex //I think we don't need to use references for mutexes: https://www.reddit.com/r/golang/comments/u9o5wj/mutex_struct_field_as_reference_or_value/
-	mu      sync.Mutex
-	dead    int32 // for testing
+	// locks   map[int]*sync.Mutex //I think we don't need to use references for mutexes: https://www.reddit.com/r/golang/comments/u9o5wj/mutex_struct_field_as_reference_or_value/
+	// mu      sync.Mutex
+	dead int32 // for testing
 }
 
 func (c *Central) Kill() {
@@ -43,14 +44,14 @@ func (c *Central) killed() bool {
 	return z == 1
 }
 
-func (c *Central) lockPage(pageID int) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if _, ok := c.locks[pageID]; !ok {
-		c.locks[pageID] = &sync.Mutex{}
-	}
-	c.locks[pageID].Lock()
-}
+// func (c *Central) lockPage(pageID int) {
+// 	c.mu.Lock()
+// 	defer c.mu.Unlock()
+// 	if _, ok := c.locks[pageID]; !ok {
+// 		c.locks[pageID] = &sync.Mutex{}
+// 	}
+// 	c.locks[pageID].Lock()
+// }
 
 func (c *Central) handleReadWrite(args *ReadWriteArgs, reply *ReadWriteReply) {
 	if args.Access == 1 {
@@ -106,18 +107,7 @@ func (c *Central) initialize() {
 	c.clients = make(map[int]*labrpc.ClientEnd)
 	c.copyset = make(map[uintptr]map[int]int)
 	c.owner = make(map[uintptr]Owner)
-}
-
-func (c *Central) registerClient(client *labrpc.ClientEnd, clientID int) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.clients[clientID] = client
-}
-
-func (c *Central) unregisterClient(clientID int) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	delete(c.clients, clientID)
+	go c.initializeRPC()
 }
 
 func MakeCentral() *Central {
@@ -125,4 +115,21 @@ func MakeCentral() *Central {
 	c.initialize()
 	labrpc.MakeService(c)
 	return c
+}
+
+func (c *Central) initializeRPC() {
+	rpc.Register(c)
+	l, err := net.Listen("tcp", ":1234")
+	if err != nil {
+		log.Fatal("listen error:", err)
+	}
+	defer l.Close()
+
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			log.Fatal("accept error:", err)
+		}
+		go rpc.ServeConn(conn)
+	}
 }

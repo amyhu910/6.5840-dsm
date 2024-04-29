@@ -83,7 +83,3 @@ void set_page(uintptr_t addr, void *data) {
     uintptr_t offset = (uintptr_t)addr - (uintptr_t)page_start;
     memcpy(page_start + offset, data, page_size);
 }
-
-void test_cgo(int a) {
-    printf("Hello from C: %d\n", a);
-}

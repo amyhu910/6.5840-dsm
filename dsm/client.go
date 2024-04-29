@@ -6,11 +6,12 @@ package dsm_go
 */
 import "C"
 import (
+	"log"
 	"sync/atomic"
 	"syscall"
-	"unsafe"
 
-	"6.5840-dsm/labrpc"
+	"net"
+	"net/rpc"
 )
 
 const (
@@ -22,8 +23,8 @@ var PageSize = syscall.Getpagesize()
 type Err string
 
 type Client struct {
-	peers   []*labrpc.ClientEnd
-	central *labrpc.ClientEnd
+	peers   map[int]*rpc.Client
+	central *rpc.Client
 	id      int
 	dead    int32 // for testing
 }
@@ -38,10 +39,6 @@ func (c *Client) killed() bool {
 	return z == 1
 }
 
-func convertVoidPtrToByteSlice(ptr unsafe.Pointer, length int) []byte {
-	return (*[1 << 30]byte)(ptr)[:length:length]
-}
-
 func (c *Client) handlePageRequest(args *PageRequestArgs, reply *PageRequestReply) {
 	// lock page somehow
 	if args.RequestType == 1 {
@@ -54,13 +51,13 @@ func (c *Client) handlePageRequest(args *PageRequestArgs, reply *PageRequestRepl
 
 func (c *Client) handleRead(addr uintptr) []byte {
 	ownerReply := &ReadWriteReply{}
-	ok := c.central.Call("Central.handleReadWrite", &ReadWriteArgs{ClientID: c.id, Addr: addr, Access: 1}, ownerReply)
-	if !ok {
+	err := c.central.Call("Central.handleReadWrite", &ReadWriteArgs{ClientID: c.id, Addr: addr, Access: 1}, ownerReply)
+	if err != nil {
 		return nil
 	}
 	pageReply := &PageRequestReply{}
-	ok = c.peers[ownerReply.Owner].Call("Client.handlePageRequest", &PageRequestArgs{Addr: addr, RequestType: 1}, pageReply)
-	if !ok {
+	err = c.peers[ownerReply.Owner].Call("Client.handlePageRequest", &PageRequestArgs{Addr: addr, RequestType: 1}, pageReply)
+	if err != nil {
 		return nil
 	}
 	return pageReply.Data
@@ -68,8 +65,8 @@ func (c *Client) handleRead(addr uintptr) []byte {
 
 func (c *Client) handleWrite(addr uintptr) {
 	ownerReply := &ReadWriteReply{}
-	ok := c.central.Call("Central.handleReadWrite", &ReadWriteArgs{ClientID: c.id, Addr: addr, Access: 2}, ownerReply)
-	if !ok {
+	err := c.central.Call("Central.handleReadWrite", &ReadWriteArgs{ClientID: c.id, Addr: addr, Access: 2}, ownerReply)
+	if err != nil {
 		return
 	}
 	if ownerReply.Err != OK {
@@ -77,9 +74,9 @@ func (c *Client) handleWrite(addr uintptr) {
 	}
 	pageReply := &PageRequestReply{}
 	if ownerReply.Owner != -1 {
-		ok = c.peers[ownerReply.Owner].Call("Client.handlePageRequest", &PageRequestArgs{Addr: addr, RequestType: 2}, pageReply)
+		err = c.peers[ownerReply.Owner].Call("Client.handlePageRequest", &PageRequestArgs{Addr: addr, RequestType: 2}, pageReply)
 	}
-	if !ok {
+	if err != nil {
 		return
 	}
 	C.change_access(C.uintptr_t(addr), 2)
@@ -94,14 +91,43 @@ func (c *Client) changeAccess(args *InvalidateArgs, reply *InvalidateReply) {
 	}
 }
 
-func (c *Client) initialize(peers []*labrpc.ClientEnd, server *labrpc.ClientEnd, me int) {
-	c.peers = peers
-	c.central = server
+func (c *Client) initialize(peerAddr map[int]string, centralAddr string, me int) {
+	c.peers = make(map[int]*rpc.Client)
+	for id, addr := range peerAddr {
+		peer, err := rpc.Dial("tcp", addr)
+		if err != nil {
+			log.Fatal("could not connect to peer", err)
+		}
+		c.peers[id] = peer
+	}
+	central, err := rpc.Dial("tcp", centralAddr)
+	if err != nil {
+		log.Fatal("could not connect to central", err)
+	}
+	c.central = central
 	c.id = me
+	go c.initializeRPC()
 }
 
-func MakeClient(peers []*labrpc.ClientEnd, server *labrpc.ClientEnd, me int) *Client {
+func MakeClient(peers map[int]string, centralAddr string, me int) *Client {
 	c := &Client{}
-	c.initialize(peers, server, me)
+	c.initialize(peers, centralAddr, me)
 	return c
+}
+
+func (c *Client) initializeRPC() {
+	rpc.Register(c)
+	l, err := net.Listen("tcp", ":1234")
+	if err != nil {
+		log.Fatal("listen error:", err)
+	}
+	defer l.Close()
+
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			log.Fatal("accept error:", err)
+		}
+		go rpc.ServeConn(conn)
+	}
 }
