@@ -1,10 +1,14 @@
 package dsm_go
 
+/*
+#cgo CFLAGS: -Wall
+#include "dsm.h"
+*/
+import "C"
 import (
 	"sync/atomic"
 	"syscall"
-
-	"C"
+	"unsafe"
 
 	"6.5840-dsm/labrpc"
 )
@@ -13,7 +17,7 @@ const (
 	OK = "OK"
 )
 
-var PageSize uintptr
+var PageSize = syscall.Getpagesize()
 
 type Err string
 
@@ -34,17 +38,21 @@ func (c *Client) killed() bool {
 	return z == 1
 }
 
+func convertVoidPtrToByteSlice(ptr unsafe.Pointer, length int) []byte {
+	return (*[1 << 30]byte)(ptr)[:length:length]
+}
+
 func (c *Client) handlePageRequest(args *PageRequestArgs, reply *PageRequestReply) {
 	// lock page somehow
 	if args.RequestType == 1 {
-		C.change_access(args.Addr, 1)
+		C.change_access(C.uintptr_t(args.Addr), 1)
 	} else if args.RequestType == 2 {
-		C.change_access(args.Addr, 0)
+		C.change_access(C.uintptr_t(args.Addr), 0)
 	}
-	reply.Data = C.get_page(args.Addr)
+	reply.Data = C.GoBytes(C.get_page(C.uintptr_t(args.Addr)), C.int(PageSize))
 }
 
-func (c *Client) handleRead(addr int) []byte {
+func (c *Client) handleRead(addr uintptr) []byte {
 	ownerReply := &ReadWriteReply{}
 	ok := c.central.Call("Central.handleReadWrite", &ReadWriteArgs{ClientID: c.id, Addr: addr, Access: 1}, ownerReply)
 	if !ok {
@@ -58,7 +66,7 @@ func (c *Client) handleRead(addr int) []byte {
 	return pageReply.Data
 }
 
-func (c *Client) handleWrite(addr int) {
+func (c *Client) handleWrite(addr uintptr) {
 	ownerReply := &ReadWriteReply{}
 	ok := c.central.Call("Central.handleReadWrite", &ReadWriteArgs{ClientID: c.id, Addr: addr, Access: 2}, ownerReply)
 	if !ok {
@@ -74,15 +82,15 @@ func (c *Client) handleWrite(addr int) {
 	if !ok {
 		return
 	}
-	C.change_access(addr, 2)
-	C.set_page(addr, pageReply.Data)
+	C.change_access(C.uintptr_t(addr), 2)
+	C.set_page(C.uintptr_t(addr), C.CBytes(pageReply.Data))
 }
 
 func (c *Client) changeAccess(args *InvalidateArgs, reply *InvalidateReply) {
 	// lock page somehow
-	C.change_access(args.Addr, args.NewAccess)
+	C.change_access(C.uintptr_t(args.Addr), C.int(args.NewAccess))
 	if args.ReturnPage {
-		reply.Data = C.get_page(args.Addr)
+		reply.Data = C.GoBytes(C.get_page(C.uintptr_t(args.Addr)), C.int(PageSize))
 	}
 }
 
@@ -90,7 +98,6 @@ func (c *Client) initialize(peers []*labrpc.ClientEnd, server *labrpc.ClientEnd,
 	c.peers = peers
 	c.central = server
 	c.id = me
-	PageSize = uintptr(syscall.Getpagesize())
 }
 
 func MakeClient(peers []*labrpc.ClientEnd, server *labrpc.ClientEnd, me int) *Client {

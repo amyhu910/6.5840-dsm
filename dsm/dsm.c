@@ -9,6 +9,8 @@
 #include <sys/resource.h>
 #include <math.h>
 
+#include "dsm.h"
+
 #define page_size sysconf(_SC_PAGESIZE)
 
 // align_down - rounds a value down to an alignment
@@ -28,7 +30,7 @@ handle_sigsegv(int sig, siginfo_t *info, void *ctx)
     int i, pos;
     uintptr_t pg;
 
-    pg = align_down((void *) info->si_addr);
+    pg = (uintptr_t)align_down((void *) info->si_addr);
 }
 
 static void
@@ -54,15 +56,14 @@ setup(int num_pages, int index, int total_servers) {
     mprotect(p + index * page_size, page_size, PROT_READ | PROT_WRITE);
 }
 
-static void 
-change_access(int addr, int NEW_PROT) {
+void 
+change_access(uintptr_t addr, int NEW_PROT) {
     // set up the page at index to be read-only
-    mprotect(addr, page_size, NEW_PROT);
+    mprotect((void *)addr, page_size, NEW_PROT);
 }
 
-void *get_page(int addr) {
-    intptr_t addr = (intptr_t) addr;
-    void *page_start = align_down(addr);
+void *get_page(uintptr_t addr) {
+    void *page_start = align_down((void *)addr);
 
     // Allocate memory to hold the page copy
     void *page_copy = malloc(page_size);
@@ -77,8 +78,12 @@ void *get_page(int addr) {
     return page_copy;
 }
 
-void set_page(int addr, void *data) {
-    void *page_start = align_down(addr);
+void set_page(uintptr_t addr, void *data) {
+    void *page_start = align_down((void *)addr);
     uintptr_t offset = (uintptr_t)addr - (uintptr_t)page_start;
     memcpy(page_start + offset, data, page_size);
+}
+
+void test_cgo(int a) {
+    printf("Hello from C: %d\n", a);
 }

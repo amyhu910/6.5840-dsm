@@ -26,8 +26,8 @@ type Owner struct {
 type Central struct {
 	// The central's name
 	clients map[int]*labrpc.ClientEnd
-	copyset map[int]map[int]int
-	owner   map[int]Owner
+	copyset map[uintptr]map[int]int
+	owner   map[uintptr]Owner
 	locks   map[int]*sync.Mutex //I think we don't need to use references for mutexes: https://www.reddit.com/r/golang/comments/u9o5wj/mutex_struct_field_as_reference_or_value/
 	mu      sync.Mutex
 	dead    int32 // for testing
@@ -54,31 +54,31 @@ func (c *Central) lockPage(pageID int) {
 
 func (c *Central) handleReadWrite(args *ReadWriteArgs, reply *ReadWriteReply) {
 	if args.Access == 1 {
-		c.lockPage(args.Addr)
+		// c.lockPage(args.Addr)
 		if _, ok := c.copyset[args.Addr]; !ok {
 			c.copyset[args.Addr] = make(map[int]int)
 		}
 		c.copyset[args.Addr][args.ClientID] += 1 // TODO: Is the reason we use a map here because it's a "set"? yes
 		reply.Err = OK
 		reply.Owner = c.owner[args.Addr].OwnerID
-		c.locks[args.Addr].Unlock()
+		// c.locks[args.Addr].Unlock()
 	} else if args.Access == 2 {
 		c.invalidateCaches(args.Addr)
-		c.locks[args.Addr].Lock()
+		// c.locks[args.Addr].Lock()
 		for len(c.copyset[args.Addr]) > 0 {
-			c.locks[args.Addr].Unlock()
-			c.locks[args.Addr].Lock()
+			// c.locks[args.Addr].Unlock()
+			// c.locks[args.Addr].Lock()
 		}
 		reply.Err = OK
 		reply.Owner = c.owner[args.Addr].OwnerID
 		c.owner[args.Addr] = Owner{OwnerID: args.ClientID, AccessType: 2}
-		c.locks[args.Addr].Unlock()
+		// c.locks[args.Addr].Unlock()
 	}
 }
 
-func (c *Central) invalidateCaches(pageID int) {
-	c.lockPage(pageID)
-	defer c.locks[pageID].Unlock()
+func (c *Central) invalidateCaches(pageID uintptr) {
+	// c.lockPage(pageID)
+	// defer c.locks[pageID].Unlock()
 	copyset, ok := c.copyset[pageID]
 	if !ok || len(copyset) == 0 {
 		return
@@ -91,7 +91,7 @@ func (c *Central) invalidateCaches(pageID int) {
 	}
 }
 
-func (c *Central) makeInvalid(addr int, clientID int) {
+func (c *Central) makeInvalid(addr uintptr, clientID int) {
 	args := InvalidateArgs{Addr: addr, NewAccess: 0, ReturnPage: false}
 	reply := InvalidateReply{}
 	ok := c.clients[clientID].Call("Client.ChangeAccess", &args, &reply)
@@ -104,8 +104,8 @@ func (c *Central) makeInvalid(addr int, clientID int) {
 
 func (c *Central) initialize() {
 	c.clients = make(map[int]*labrpc.ClientEnd)
-	c.copyset = make(map[int]map[int]int)
-	c.owner = make(map[int]Owner)
+	c.copyset = make(map[uintptr]map[int]int)
+	c.owner = make(map[uintptr]Owner)
 }
 
 func (c *Central) registerClient(client *labrpc.ClientEnd, clientID int) {

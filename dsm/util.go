@@ -2,7 +2,7 @@ package dsm_go
 
 type ReadWriteArgs struct {
 	ClientID int
-	Addr     int
+	Addr     uintptr
 	Access   int
 }
 
@@ -13,7 +13,7 @@ type ReadWriteReply struct {
 }
 
 type PageRequestArgs struct {
-	Addr        int
+	Addr        uintptr
 	RequestType int
 	Lease       Lease
 }
@@ -24,7 +24,7 @@ type PageRequestReply struct {
 }
 
 type InvalidateArgs struct {
-	Addr       int
+	Addr       uintptr
 	NewAccess  int
 	ReturnPage bool
 }
