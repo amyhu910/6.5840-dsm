@@ -107,6 +107,9 @@ int main(int argc, char **argv) {
     int num_pages = atoi(argv[1]);
     int index = atoi(argv[2]);
     int total_servers = atoi(argv[3]);
+    // int num_pages = 1;
+    // int index = 0;
+    // int total_servers = 2;
 
     setup(num_pages, index, total_servers);
 

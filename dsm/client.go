@@ -1,4 +1,4 @@
-package main
+package dsm
 
 /*
 #cgo CFLAGS: -Wall
@@ -148,5 +148,3 @@ func (c *Client) initializeRPC() {
 		go rpc.ServeConn(conn)
 	}
 }
-
-func main() {}

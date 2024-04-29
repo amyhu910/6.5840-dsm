@@ -1,4 +1,4 @@
-package main
+package dsm
 
 type ReadWriteArgs struct {
 	ClientID int
