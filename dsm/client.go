@@ -5,6 +5,7 @@ package main
 #include "dsm.h"
 */
 import "C"
+
 import (
 	"log"
 	"sync/atomic"
@@ -39,6 +40,8 @@ func (c *Client) killed() bool {
 	return z == 1
 }
 
+var client *Client
+
 func (c *Client) handlePageRequest(args *PageRequestArgs, reply *PageRequestReply) {
 	// lock page somehow
 	if args.RequestType == 1 {
@@ -49,7 +52,15 @@ func (c *Client) handlePageRequest(args *PageRequestArgs, reply *PageRequestRepl
 	reply.Data = C.GoBytes(C.get_page(C.uintptr_t(args.Addr)), C.int(PageSize))
 }
 
-//export handleRead
+//export HandleRead
+func HandleRead(addr C.uintptr_t) *C.char {
+	result := client.handleRead(uintptr(addr))
+	if result == nil {
+		return nil
+	}
+	return (*C.char)(C.CBytes(result))
+}
+
 func (c *Client) handleRead(addr uintptr) []byte {
 	ownerReply := &ReadWriteReply{}
 	err := c.central.Call("Central.handleReadWrite", &ReadWriteArgs{ClientID: c.id, Addr: addr, Access: 1}, ownerReply)
@@ -64,7 +75,11 @@ func (c *Client) handleRead(addr uintptr) []byte {
 	return pageReply.Data
 }
 
-//export handleWrite
+//export HandleWrite
+func HandleWrite(addr C.uintptr_t) {
+	client.handleWrite(uintptr(addr))
+}
+
 func (c *Client) handleWrite(addr uintptr) {
 	ownerReply := &ReadWriteReply{}
 	err := c.central.Call("Central.handleReadWrite", &ReadWriteArgs{ClientID: c.id, Addr: addr, Access: 2}, ownerReply)
@@ -93,15 +108,14 @@ func (c *Client) changeAccess(args *InvalidateArgs, reply *InvalidateReply) {
 	}
 }
 
-func (c *Client) initialize(peerAddr map[int]string, centralAddr string, me int) {
+func (c *Client) initialize(peerAddr string, centralAddr string, me int) {
 	c.peers = make(map[int]*rpc.Client)
-	for id, addr := range peerAddr {
-		peer, err := rpc.Dial("tcp", addr)
-		if err != nil {
-			log.Fatal("could not connect to peer", err)
-		}
-		c.peers[id] = peer
+	id := 0
+	peer, err := rpc.Dial("tcp", peerAddr)
+	if err != nil {
+		log.Fatal("could not connect to peer", err)
 	}
+	c.peers[id] = peer
 	central, err := rpc.Dial("tcp", centralAddr)
 	if err != nil {
 		log.Fatal("could not connect to central", err)
@@ -112,10 +126,10 @@ func (c *Client) initialize(peerAddr map[int]string, centralAddr string, me int)
 }
 
 //export MakeClient
-func MakeClient(peers map[int]string, centralAddr string, me int) *Client {
+func MakeClient(peers *C.char, centralAddr *C.char, me C.int) {
 	c := &Client{}
-	c.initialize(peers, centralAddr, me)
-	return c
+	c.initialize(C.GoString(peers), C.GoString(centralAddr), int(me))
+	client = c
 }
 
 func (c *Client) initializeRPC() {

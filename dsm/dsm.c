@@ -10,10 +10,9 @@
 #include <math.h>
 
 #include "dsm.h"
+#include "_cgo_export.h"
 
 #define page_size sysconf(_SC_PAGESIZE)
-
-void* client;
 
 // align_down - rounds a value down to an alignment
 // @x: the value
@@ -28,14 +27,12 @@ void *align_down(void *addr) {
 static void
 handle_sigsegv(int sig, siginfo_t *info, void *ctx)
 {
-    static double *va = NULL;
-    int i, pos;
     uintptr_t pg;
 
     pg = (uintptr_t)align_down((void *) info->si_addr);
     unsigned long pte;
 
-    if (mincore(pg, page_size, &pte) == -1) {
+    if (mincore((void *)info->si_addr, page_size, (char *)&pte) == -1) {
         perror("mincore");
         return;
     }
@@ -43,26 +40,16 @@ handle_sigsegv(int sig, siginfo_t *info, void *ctx)
     int prot = pte & (PROT_READ | PROT_WRITE);
 
     if (prot & PROT_READ) {
-        handle_write(client, info->si_addr);
+        memcpy(&pg, HandleRead((uintptr_t) info->si_addr), page_size);
     } else {
-        handle_read(client, info->si_addr);
+        HandleWrite((uintptr_t) info->si_addr);
     }
-}
-
-void* handle_read(void* client, uintptr_t addr) {
-    return (void*)GoHandleRead(client, addr);
-}
-
-void* handle_write(void* client, uintptr_t addr) {
-    return (void*)GoHandleWrite(client, addr);
 }
 
 static void
 setup(int num_pages, int index, int total_servers) {
     // set up sigsegv handler
-    char central[] = "localhost:8080";
-    char other[] = "localhost:8081";
-    client = GoMakeClient(other, central, index);
+    MakeClient("localhost:8080", "localhost:8081", index);
     struct sigaction act;
     act.sa_sigaction = handle_sigsegv;
     act.sa_flags = SA_SIGINFO;
