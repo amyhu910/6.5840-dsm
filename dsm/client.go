@@ -1,4 +1,4 @@
-package dsm_go
+package main
 
 /*
 #cgo CFLAGS: -Wall
@@ -49,6 +49,7 @@ func (c *Client) handlePageRequest(args *PageRequestArgs, reply *PageRequestRepl
 	reply.Data = C.GoBytes(C.get_page(C.uintptr_t(args.Addr)), C.int(PageSize))
 }
 
+//export handleRead
 func (c *Client) handleRead(addr uintptr) []byte {
 	ownerReply := &ReadWriteReply{}
 	err := c.central.Call("Central.handleReadWrite", &ReadWriteArgs{ClientID: c.id, Addr: addr, Access: 1}, ownerReply)
@@ -63,6 +64,7 @@ func (c *Client) handleRead(addr uintptr) []byte {
 	return pageReply.Data
 }
 
+//export handleWrite
 func (c *Client) handleWrite(addr uintptr) {
 	ownerReply := &ReadWriteReply{}
 	err := c.central.Call("Central.handleReadWrite", &ReadWriteArgs{ClientID: c.id, Addr: addr, Access: 2}, ownerReply)
@@ -109,6 +111,7 @@ func (c *Client) initialize(peerAddr map[int]string, centralAddr string, me int)
 	go c.initializeRPC()
 }
 
+//export MakeClient
 func MakeClient(peers map[int]string, centralAddr string, me int) *Client {
 	c := &Client{}
 	c.initialize(peers, centralAddr, me)
@@ -131,3 +134,5 @@ func (c *Client) initializeRPC() {
 		go rpc.ServeConn(conn)
 	}
 }
+
+func main() {}

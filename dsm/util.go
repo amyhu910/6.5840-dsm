@@ -1,4 +1,4 @@
-package dsm_go
+package main
 
 type ReadWriteArgs struct {
 	ClientID int

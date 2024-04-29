@@ -13,6 +13,8 @@
 
 #define page_size sysconf(_SC_PAGESIZE)
 
+void* client;
+
 // align_down - rounds a value down to an alignment
 // @x: the value
 // @a: the alignment (must be power of 2)
@@ -31,11 +33,36 @@ handle_sigsegv(int sig, siginfo_t *info, void *ctx)
     uintptr_t pg;
 
     pg = (uintptr_t)align_down((void *) info->si_addr);
+    unsigned long pte;
+
+    if (mincore(pg, page_size, &pte) == -1) {
+        perror("mincore");
+        return;
+    }
+
+    int prot = pte & (PROT_READ | PROT_WRITE);
+
+    if (prot & PROT_READ) {
+        handle_write(client, info->si_addr);
+    } else {
+        handle_read(client, info->si_addr);
+    }
+}
+
+void* handle_read(void* client, uintptr_t addr) {
+    return (void*)GoHandleRead(client, addr);
+}
+
+void* handle_write(void* client, uintptr_t addr) {
+    return (void*)GoHandleWrite(client, addr);
 }
 
 static void
 setup(int num_pages, int index, int total_servers) {
     // set up sigsegv handler
+    char central[] = "localhost:8080";
+    char other[] = "localhost:8081";
+    client = GoMakeClient(other, central, index);
     struct sigaction act;
     act.sa_sigaction = handle_sigsegv;
     act.sa_flags = SA_SIGINFO;
@@ -82,4 +109,23 @@ void set_page(uintptr_t addr, void *data) {
     void *page_start = align_down((void *)addr);
     uintptr_t offset = (uintptr_t)addr - (uintptr_t)page_start;
     memcpy(page_start + offset, data, page_size);
+}
+
+int main(int argc, char **argv) {
+    if (argc != 4) {
+        fprintf(stderr, "Usage: %s <num_pages> <index> <total_servers>\n", argv[0]);
+        return 1;
+    }
+
+    int num_pages = atoi(argv[1]);
+    int index = atoi(argv[2]);
+    int total_servers = atoi(argv[3]);
+
+    setup(num_pages, index, total_servers);
+
+    while (1) {
+        sleep(1);
+    }
+
+    return 0;
 }
