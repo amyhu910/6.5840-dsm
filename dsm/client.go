@@ -44,7 +44,7 @@ func (c *Client) killed() bool {
 
 var client *Client
 
-func (c *Client) HandlePageRequest(args *PageRequestArgs, reply *PageRequestReply) {
+func (c *Client) HandlePageRequest(args *PageRequestArgs, reply *PageRequestReply) error {
 	// lock page somehow
 	fmt.Println("handling page request on go side")
 	if args.RequestType == 1 {
@@ -53,6 +53,7 @@ func (c *Client) HandlePageRequest(args *PageRequestArgs, reply *PageRequestRepl
 		C.change_access(C.uintptr_t(args.Addr), 0)
 	}
 	reply.Data = C.GoBytes(C.get_page(C.uintptr_t(args.Addr)), C.int(PageSize))
+	return nil
 }
 
 //export HandleRead
@@ -109,12 +110,13 @@ func (c *Client) handleWrite(addr uintptr) {
 	C.set_page(C.uintptr_t(addr), C.CBytes(pageReply.Data))
 }
 
-func (c *Client) ChangeAccess(args *InvalidateArgs, reply *InvalidateReply) {
+func (c *Client) ChangeAccess(args *InvalidateArgs, reply *InvalidateReply) error {
 	// lock page somehow
 	C.change_access(C.uintptr_t(args.Addr), C.int(args.NewAccess))
 	if args.ReturnPage {
 		reply.Data = C.GoBytes(C.get_page(C.uintptr_t(args.Addr)), C.int(PageSize))
 	}
+	return nil
 }
 
 func call(addr string, rpcname string, args interface{}, reply interface{}) bool {

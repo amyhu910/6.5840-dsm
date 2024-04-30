@@ -53,7 +53,7 @@ func (c *Central) killed() bool {
 // 	c.locks[pageID].Lock()
 // }
 
-func (c *Central) HandleReadWrite(args *ReadWriteArgs, reply *ReadWriteReply) {
+func (c *Central) HandleReadWrite(args *ReadWriteArgs, reply *ReadWriteReply) error {
 	fmt.Println("central handling read write on go side")
 	if args.Access == 1 {
 		// c.lockPage(args.Addr)
@@ -77,6 +77,7 @@ func (c *Central) HandleReadWrite(args *ReadWriteArgs, reply *ReadWriteReply) {
 		c.owner[args.Addr] = Owner{OwnerAddr: c.clients[args.ClientID], AccessType: 2}
 		// c.locks[args.Addr].Unlock()
 	}
+	return nil
 }
 
 func (c *Central) invalidateCaches(pageID uintptr) {
@@ -165,7 +166,7 @@ func MakeCentral(clients map[int]string, numpages int) *Central {
 }
 
 func (c *Central) initializeRPC() {
-	// rpc.Register(c)
+	rpc.Register(c)
 	l, err := net.Listen("tcp", port)
 	if err != nil {
 		log.Fatal("listen error:", err)
