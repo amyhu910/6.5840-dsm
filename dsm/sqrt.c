@@ -121,24 +121,24 @@ test_sqrt_region(void)
   printf("All tests passed!\n");
 }
 
-int
-main(int argc, char *argv[])
-{
-    struct rlimit limits;
+// int
+// main(int argc, char *argv[])
+// {
+//     struct rlimit limits;
 
-    // Get the current resource limits for RLIMIT_AS (address space)
-    if (getrlimit(RLIMIT_AS, &limits) == -1) {
-        // Error handling if getrlimit fails
-        perror("getrlimit");
-        return 1;
-    }
+//     // Get the current resource limits for RLIMIT_AS (address space)
+//     if (getrlimit(RLIMIT_AS, &limits) == -1) {
+//         // Error handling if getrlimit fails
+//         perror("getrlimit");
+//         return 1;
+//     }
 
-    // Output the current soft limit for address space
-    printf("Current soft limit for address space: %llu\n", limits.rlim_cur);
-    printf("Current hard limit for address space: %llu\n", limits.rlim_max);  
-  page_size = sysconf(_SC_PAGESIZE);
-  printf("page_size is %ld\n", page_size);
-  setup_sqrt_region();
-  test_sqrt_region();
-  return 0;
-}
+//     // Output the current soft limit for address space
+//     printf("Current soft limit for address space: %llu\n", limits.rlim_cur);
+//     printf("Current hard limit for address space: %llu\n", limits.rlim_max);  
+//   page_size = sysconf(_SC_PAGESIZE);
+//   printf("page_size is %ld\n", page_size);
+//   setup_sqrt_region();
+//   test_sqrt_region();
+//   return 0;
+// }

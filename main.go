@@ -6,7 +6,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/amyhu910/6.5840-dsm/dsm"
+	"github.com/6.5840-dsm/dsm"
 )
 
 func main() {
