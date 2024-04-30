@@ -7,7 +7,10 @@ package dsm
 import "C"
 
 import (
+	"fmt"
 	"log"
+	"os"
+	"strconv"
 	"sync/atomic"
 	"syscall"
 
@@ -125,10 +128,16 @@ func (c *Client) initialize(peerAddr string, centralAddr string, me int) {
 	go c.initializeRPC()
 }
 
-//export MakeClient
-func MakeClient(peers *C.char, centralAddr *C.char, me C.int) {
+// //export MakeClient
+// func MakeClient(peers *C.char, centralAddr *C.char, me C.int) {
+// 	c := &Client{}
+// 	c.initialize(C.GoString(peers), C.GoString(centralAddr), int(me))
+// 	client = c
+// }
+
+func MakeClient(peers string, centralAddr string, me int) {
 	c := &Client{}
-	c.initialize(C.GoString(peers), C.GoString(centralAddr), int(me))
+	c.initialize(peers, centralAddr, me)
 	client = c
 }
 
@@ -147,4 +156,40 @@ func (c *Client) initializeRPC() {
 		}
 		go rpc.ServeConn(conn)
 	}
+}
+
+func main() {
+	for i, args := range os.Args {
+		if args == "-c" {
+			clients := make(map[int]string)
+			for j := i + 1; j < len(os.Args); j++ {
+				clients[j] = os.Args[j]
+			}
+			centralSetup(clients)
+		} else if args == "-p" {
+			numpages := 10
+			numservers := 2
+			index, err := strconv.Atoi(os.Args[i+1])
+			if err != nil {
+				log.Fatal("could not parse index", err)
+			}
+			peer := os.Args[i+2]
+			central := os.Args[i+3]
+			clientSetup(numpages, index, numservers, peer, central)
+		} else if args == "-h" {
+			fmt.Println("If you want to run a central server, use the -c flag followed by the addresses of the clients.")
+			fmt.Println("If you want to run a client, use the -p flag followed by the index of the client, the address of the peer, and the address of the central server.")
+		}
+	}
+}
+
+func clientSetup(numpages int, index int, numservers int, peer string, central string) {
+	// MakeClient("localhost:8080", "localhost:8081", index)
+	MakeClient(peer, central, index)
+
+	C.setup(C.int(numpages), C.int(index), C.int(numservers))
+}
+
+func centralSetup(clients map[int]string) {
+	MakeCentral(clients)
 }

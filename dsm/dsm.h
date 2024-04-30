@@ -4,6 +4,7 @@
 void change_access(uintptr_t addr, int NEW_PROT);
 void *get_page(uintptr_t addr);
 void set_page(uintptr_t addr, void *page_copy);
+void setup(int num_pages, int index, int total_servers);
 
 // #ifdef __cplusplus
 // extern "C" {

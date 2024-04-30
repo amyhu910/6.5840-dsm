@@ -46,10 +46,10 @@ handle_sigsegv(int sig, siginfo_t *info, void *ctx)
     }
 }
 
-static void
+void
 setup(int num_pages, int index, int total_servers) {
     // set up sigsegv handler
-    MakeClient("localhost:8080", "localhost:8081", index);
+    // MakeClient("localhost:8080", "localhost:8081", index);
     struct sigaction act;
     act.sa_sigaction = handle_sigsegv;
     act.sa_flags = SA_SIGINFO;
@@ -98,24 +98,24 @@ void set_page(uintptr_t addr, void *data) {
     memcpy(page_start + offset, data, page_size);
 }
 
-int main(int argc, char **argv) {
-    if (argc != 4) {
-        fprintf(stderr, "Usage: %s <num_pages> <index> <total_servers>\n", argv[0]);
-        return 1;
-    }
+// int main(int argc, char **argv) {
+//     if (argc != 4) {
+//         fprintf(stderr, "Usage: %s <num_pages> <index> <total_servers>\n", argv[0]);
+//         return 1;
+//     }
 
-    int num_pages = atoi(argv[1]);
-    int index = atoi(argv[2]);
-    int total_servers = atoi(argv[3]);
-    // int num_pages = 1;
-    // int index = 0;
-    // int total_servers = 2;
+//     int num_pages = atoi(argv[1]);
+//     int index = atoi(argv[2]);
+//     int total_servers = atoi(argv[3]);
+//     // int num_pages = 1;
+//     // int index = 0;
+//     // int total_servers = 2;
 
-    setup(num_pages, index, total_servers);
+//     setup(num_pages, index, total_servers);
 
-    while (1) {
-        sleep(1);
-    }
+//     while (1) {
+//         sleep(1);
+//     }
 
-    return 0;
-}
+//     return 0;
+// }
