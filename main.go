@@ -19,7 +19,7 @@ func main() {
 			}
 			dsm.CentralSetup(clients, numpages)
 		} else if args == "-p" {
-			numservers := 1
+			numservers := 2
 			index, err := strconv.Atoi(os.Args[i+1])
 			if err != nil {
 				log.Fatal("could not parse index", err)

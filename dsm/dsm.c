@@ -26,6 +26,29 @@ void *align_down(void *addr) {
 }
 
 static void
+handle_sigbus(int sig, siginfo_t *info, void *ctx)
+{
+    printf("Handling SIGBUS\n");
+    uintptr_t pg;
+
+    pg = (uintptr_t)align_down((void *) info->si_addr);
+    unsigned long pte;
+
+    if (mincore((void *)info->si_addr, page_size, (char *)&pte) == -1) {
+        perror("mincore");
+        return;
+    }
+
+    int prot = pte & (PROT_READ | PROT_WRITE);
+
+    if (prot & PROT_READ) {
+        HandleWrite((uintptr_t) info->si_addr);
+    } else {
+        memcpy(&pg, HandleRead((uintptr_t) info->si_addr), page_size);
+    }
+}
+
+static void
 handle_sigsegv(int sig, siginfo_t *info, void *ctx)
 {
     printf("Handling SIGSEGV\n");
@@ -42,9 +65,9 @@ handle_sigsegv(int sig, siginfo_t *info, void *ctx)
     int prot = pte & (PROT_READ | PROT_WRITE);
 
     if (prot & PROT_READ) {
-        memcpy(&pg, HandleRead((uintptr_t) info->si_addr), page_size);
-    } else {
         HandleWrite((uintptr_t) info->si_addr);
+    } else {
+        memcpy(&pg, HandleRead((uintptr_t) info->si_addr), page_size);
     }
 }
 
@@ -53,12 +76,22 @@ setup(int num_pages, int index, int total_servers, bool call_tests) {
     // set up sigsegv handler
     // MakeClient("localhost:8080", "localhost:8081", index);
     printf("Setting up SIGSEGV handler\n");
-    struct sigaction act;
-    act.sa_sigaction = handle_sigsegv;
-    act.sa_flags = SA_SIGINFO;
-    sigemptyset(&act.sa_mask);
-    if (sigaction(SIGSEGV, &act, NULL) == -1) {
+    struct sigaction actsegv;
+    actsegv.sa_sigaction = handle_sigsegv;
+    actsegv.sa_flags = SA_SIGINFO;
+    sigemptyset(&actsegv.sa_mask);
+    if (sigaction(SIGSEGV, &actsegv, NULL) == -1) {
         fprintf(stderr, "Couldn't set up SIGSEGV handler;, %s\n", strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Setting up SIGBUS handler\n");
+    struct sigaction actbus;
+    actbus.sa_sigaction = handle_sigbus;
+    actbus.sa_flags = SA_SIGINFO;
+    sigemptyset(&actbus.sa_mask);
+    if (sigaction(SIGBUS, &actbus, NULL) == -1) {
+        fprintf(stderr, "Couldn't set up SIGBUS handler;, %s\n", strerror(errno));
         exit(EXIT_FAILURE);
     }
 
