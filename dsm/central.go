@@ -53,9 +53,11 @@ func (c *Central) killed() bool {
 // 	c.locks[pageID].Lock()
 // }
 
-func (c *Central) handleReadWrite(args *ReadWriteArgs, reply *ReadWriteReply) {
+func (c *Central) HandleReadWrite(args *ReadWriteArgs, reply *ReadWriteReply) {
+	fmt.Println("central handling read write on go side")
 	if args.Access == 1 {
 		// c.lockPage(args.Addr)
+		go c.makeReadonlyOwner(args.Addr, c.owner[args.Addr].OwnerAddr)
 		if _, ok := c.copyset[args.Addr]; !ok {
 			c.copyset[args.Addr] = make(map[int]int)
 		}
@@ -92,6 +94,18 @@ func (c *Central) invalidateCaches(pageID uintptr) {
 	}
 }
 
+func (c *Central) makeReadonlyOwner(addr uintptr, clientAddr string) {
+	args := InvalidateArgs{Addr: addr, NewAccess: 1, ReturnPage: false}
+	reply := InvalidateReply{}
+	ok := call(clientAddr, "Client.ChangeAccess", &args, &reply)
+	// err := c.clients[clientID].Call("Client.ChangeAccess", &args, &reply)
+	for !ok {
+		// Wait until expires
+		ok = call(clientAddr, "Client.ChangeAccess", &args, &reply)
+		// err = c.clients[clientID].Call("Client.ChangeAccess", &args, &reply)
+	}
+}
+
 func (c *Central) makeInvalidOwner(addr uintptr, clientAddr string) {
 	args := InvalidateArgs{Addr: addr, NewAccess: 0, ReturnPage: false}
 	reply := InvalidateReply{}
@@ -117,7 +131,7 @@ func (c *Central) makeInvalidCopyset(addr uintptr, clientID int) {
 	delete(c.copyset[addr], clientID)
 }
 
-func (c *Central) addClient(NewClientArgs *NewClientArgs, reply *NewClientReply) {
+func (c *Central) AddClient(NewClientArgs *NewClientArgs, reply *NewClientReply) {
 	c.clients[NewClientArgs.Id] = NewClientArgs.Addr
 	reply.Err = OK
 	for _, page := range NewClientArgs.Pages {

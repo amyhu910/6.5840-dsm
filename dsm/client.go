@@ -44,8 +44,9 @@ func (c *Client) killed() bool {
 
 var client *Client
 
-func (c *Client) handlePageRequest(args *PageRequestArgs, reply *PageRequestReply) {
+func (c *Client) HandlePageRequest(args *PageRequestArgs, reply *PageRequestReply) {
 	// lock page somehow
+	fmt.Println("handling page request on go side")
 	if args.RequestType == 1 {
 		C.change_access(C.uintptr_t(args.Addr), 1)
 	} else if args.RequestType == 2 {
@@ -66,13 +67,13 @@ func HandleRead(addr C.uintptr_t) *C.char {
 func (c *Client) handleRead(addr uintptr) []byte {
 	fmt.Println("handling read on go side")
 	ownerReply := &ReadWriteReply{}
-	ok := call(c.central, "Central.handleReadWrite", &ReadWriteArgs{ClientID: c.id, Addr: addr, Access: 1}, ownerReply)
+	ok := call(c.central, "Central.HandleReadWrite", &ReadWriteArgs{ClientID: c.id, Addr: addr, Access: 1}, ownerReply)
 	// err := c.central.Call("Central.handleReadWrite", &ReadWriteArgs{ClientID: c.id, Addr: addr, Access: 1}, ownerReply)
 	if !ok {
 		return nil
 	}
 	pageReply := &PageRequestReply{}
-	ok = call(ownerReply.Owner, "Client.handlePageRequest", &PageRequestArgs{Addr: addr, RequestType: 1}, pageReply)
+	ok = call(ownerReply.Owner, "Client.HandlePageRequest", &PageRequestArgs{Addr: addr, RequestType: 1}, pageReply)
 	// err = c.peers[ownerReply.Owner].Call("Client.handlePageRequest", &PageRequestArgs{Addr: addr, RequestType: 1}, pageReply)
 	if !ok {
 		return nil
@@ -88,7 +89,7 @@ func HandleWrite(addr C.uintptr_t) {
 func (c *Client) handleWrite(addr uintptr) {
 	fmt.Println("handling write on go side")
 	ownerReply := &ReadWriteReply{}
-	ok := call(c.central, "Central.handleReadWrite", &ReadWriteArgs{ClientID: c.id, Addr: addr, Access: 2}, ownerReply)
+	ok := call(c.central, "Central.HandleReadWrite", &ReadWriteArgs{ClientID: c.id, Addr: addr, Access: 2}, ownerReply)
 	// err := c.central.Call("Central.handleReadWrite", &ReadWriteArgs{ClientID: c.id, Addr: addr, Access: 2}, ownerReply)
 	if !ok {
 		return
@@ -98,7 +99,7 @@ func (c *Client) handleWrite(addr uintptr) {
 	}
 	pageReply := &PageRequestReply{}
 	if ownerReply.Owner != "" {
-		ok = call(ownerReply.Owner, "Client.handlePageRequest", &PageRequestArgs{Addr: addr, RequestType: 2}, pageReply)
+		ok = call(ownerReply.Owner, "Client.HandlePageRequest", &PageRequestArgs{Addr: addr, RequestType: 2}, pageReply)
 		// err = c.peers[ownerReply.Owner].Call("Client.handlePageRequest", &PageRequestArgs{Addr: addr, RequestType: 2}, pageReply)
 	}
 	if !ok {
@@ -108,7 +109,7 @@ func (c *Client) handleWrite(addr uintptr) {
 	C.set_page(C.uintptr_t(addr), C.CBytes(pageReply.Data))
 }
 
-func (c *Client) changeAccess(args *InvalidateArgs, reply *InvalidateReply) {
+func (c *Client) ChangeAccess(args *InvalidateArgs, reply *InvalidateReply) {
 	// lock page somehow
 	C.change_access(C.uintptr_t(args.Addr), C.int(args.NewAccess))
 	if args.ReturnPage {

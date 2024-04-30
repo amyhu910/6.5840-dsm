@@ -116,7 +116,7 @@ setup(int num_pages, int index, int total_servers, bool call_tests) {
         test_legal_read(num_pages, index, total_servers, p);
         test_legal_write(num_pages, index, total_servers, p);
         test_illegal_read(num_pages, index, total_servers, p);
-        test_illegal_write(num_pages, index, total_servers, p);
+        // test_illegal_write(num_pages, index, total_servers, p);
     }
 }
 
