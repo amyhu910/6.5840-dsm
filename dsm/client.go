@@ -7,10 +7,7 @@ package dsm
 import "C"
 
 import (
-	"fmt"
 	"log"
-	"os"
-	"strconv"
 	"sync/atomic"
 	"syscall"
 
@@ -23,8 +20,6 @@ const (
 )
 
 var PageSize = syscall.Getpagesize()
-
-type Err string
 
 type Client struct {
 	peers   map[int]*rpc.Client
@@ -114,6 +109,7 @@ func (c *Client) changeAccess(args *InvalidateArgs, reply *InvalidateReply) {
 func (c *Client) initialize(peerAddr string, centralAddr string, me int) {
 	c.peers = make(map[int]*rpc.Client)
 	id := 0
+	go c.initializeRPC()
 	peer, err := rpc.Dial("tcp", peerAddr)
 	if err != nil {
 		log.Fatal("could not connect to peer", err)
@@ -125,7 +121,6 @@ func (c *Client) initialize(peerAddr string, centralAddr string, me int) {
 	}
 	c.central = central
 	c.id = me
-	go c.initializeRPC()
 }
 
 // //export MakeClient
@@ -158,38 +153,13 @@ func (c *Client) initializeRPC() {
 	}
 }
 
-func main() {
-	for i, args := range os.Args {
-		if args == "-c" {
-			clients := make(map[int]string)
-			for j := i + 1; j < len(os.Args); j++ {
-				clients[j] = os.Args[j]
-			}
-			centralSetup(clients)
-		} else if args == "-p" {
-			numpages := 10
-			numservers := 2
-			index, err := strconv.Atoi(os.Args[i+1])
-			if err != nil {
-				log.Fatal("could not parse index", err)
-			}
-			peer := os.Args[i+2]
-			central := os.Args[i+3]
-			clientSetup(numpages, index, numservers, peer, central)
-		} else if args == "-h" {
-			fmt.Println("If you want to run a central server, use the -c flag followed by the addresses of the clients.")
-			fmt.Println("If you want to run a client, use the -p flag followed by the index of the client, the address of the peer, and the address of the central server.")
-		}
-	}
-}
-
-func clientSetup(numpages int, index int, numservers int, peer string, central string) {
+func ClientSetup(numpages int, index int, numservers int, peer string, central string) {
 	// MakeClient("localhost:8080", "localhost:8081", index)
 	MakeClient(peer, central, index)
 
 	C.setup(C.int(numpages), C.int(index), C.int(numservers))
 }
 
-func centralSetup(clients map[int]string) {
+func CentralSetup(clients map[int]string) {
 	MakeCentral(clients)
 }

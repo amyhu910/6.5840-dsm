@@ -1,5 +1,7 @@
 package dsm
 
+type Err string
+
 type ReadWriteArgs struct {
 	ClientID int
 	Addr     uintptr

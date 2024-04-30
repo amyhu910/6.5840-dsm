@@ -103,6 +103,7 @@ func (c *Central) makeInvalid(addr uintptr, clientID int) {
 
 func (c *Central) initialize(clients map[int]string) {
 	c.clients = make(map[int]*rpc.Client)
+	go c.initializeRPC()
 	for id, addr := range clients {
 		peer, err := rpc.Dial("tcp", addr)
 		if err != nil {
@@ -112,7 +113,6 @@ func (c *Central) initialize(clients map[int]string) {
 	}
 	c.copyset = make(map[uintptr]map[int]int)
 	c.owner = make(map[uintptr]Owner)
-	go c.initializeRPC()
 }
 
 func MakeCentral(clients map[int]string) *Central {
