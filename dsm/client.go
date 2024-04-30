@@ -7,9 +7,11 @@ package dsm
 import "C"
 
 import (
+	"fmt"
 	"log"
 	"sync/atomic"
 	"syscall"
+	"time"
 
 	"net"
 	"net/rpc"
@@ -20,6 +22,8 @@ const (
 )
 
 var PageSize = syscall.Getpagesize()
+
+const port = ":1234"
 
 type Client struct {
 	peers   map[int]string
@@ -60,6 +64,7 @@ func HandleRead(addr C.uintptr_t) *C.char {
 }
 
 func (c *Client) handleRead(addr uintptr) []byte {
+	fmt.Println("handling read on go side")
 	ownerReply := &ReadWriteReply{}
 	ok := call(c.central, "Central.handleReadWrite", &ReadWriteArgs{ClientID: c.id, Addr: addr, Access: 1}, ownerReply)
 	// err := c.central.Call("Central.handleReadWrite", &ReadWriteArgs{ClientID: c.id, Addr: addr, Access: 1}, ownerReply)
@@ -67,7 +72,7 @@ func (c *Client) handleRead(addr uintptr) []byte {
 		return nil
 	}
 	pageReply := &PageRequestReply{}
-	ok = call(c.peers[ownerReply.Owner], "Client.handlePageRequest", &PageRequestArgs{Addr: addr, RequestType: 1}, pageReply)
+	ok = call(ownerReply.Owner, "Client.handlePageRequest", &PageRequestArgs{Addr: addr, RequestType: 1}, pageReply)
 	// err = c.peers[ownerReply.Owner].Call("Client.handlePageRequest", &PageRequestArgs{Addr: addr, RequestType: 1}, pageReply)
 	if !ok {
 		return nil
@@ -81,6 +86,7 @@ func HandleWrite(addr C.uintptr_t) {
 }
 
 func (c *Client) handleWrite(addr uintptr) {
+	fmt.Println("handling write on go side")
 	ownerReply := &ReadWriteReply{}
 	ok := call(c.central, "Central.handleReadWrite", &ReadWriteArgs{ClientID: c.id, Addr: addr, Access: 2}, ownerReply)
 	// err := c.central.Call("Central.handleReadWrite", &ReadWriteArgs{ClientID: c.id, Addr: addr, Access: 2}, ownerReply)
@@ -91,8 +97,8 @@ func (c *Client) handleWrite(addr uintptr) {
 		return
 	}
 	pageReply := &PageRequestReply{}
-	if ownerReply.Owner != -1 {
-		ok = call(c.peers[ownerReply.Owner], "Client.handlePageRequest", &PageRequestArgs{Addr: addr, RequestType: 2}, pageReply)
+	if ownerReply.Owner != "" {
+		ok = call(ownerReply.Owner, "Client.handlePageRequest", &PageRequestArgs{Addr: addr, RequestType: 2}, pageReply)
 		// err = c.peers[ownerReply.Owner].Call("Client.handlePageRequest", &PageRequestArgs{Addr: addr, RequestType: 2}, pageReply)
 	}
 	if !ok {
@@ -111,16 +117,19 @@ func (c *Client) changeAccess(args *InvalidateArgs, reply *InvalidateReply) {
 }
 
 func call(addr string, rpcname string, args interface{}, reply interface{}) bool {
-	client, err := rpc.Dial("tcp", addr)
+	client, err := rpc.Dial("tcp", addr+port)
+	fmt.Println("dialing", addr+port)
 	if err != nil {
 		log.Fatal("could not connect to central", err)
 	}
 	defer client.Close()
+	fmt.Println("connected to", addr)
+	fmt.Println("calling", rpcname)
 	err = client.Call(rpcname, args, reply)
-	if err != nil {
-		return false
+	if err == nil {
+		return true
 	}
-	return true
+	return false
 }
 
 func (c *Client) initialize(peerAddr string, centralAddr string, me int) {
@@ -146,12 +155,13 @@ func MakeClient(peers string, centralAddr string, me int) {
 }
 
 func (c *Client) initializeRPC() {
-	rpc.Register(c)
-	l, err := net.Listen("tcp", ":1234")
+	// rpc.Register(c)
+	l, err := net.Listen("tcp", port)
 	if err != nil {
 		log.Fatal("listen error:", err)
 	}
 	defer l.Close()
+	fmt.Println("client server listening on port", port)
 
 	for {
 		conn, err := l.Accept()
@@ -166,9 +176,19 @@ func ClientSetup(numpages int, index int, numservers int, peer string, central s
 	// MakeClient("localhost:8080", "localhost:8081", index)
 	MakeClient(peer, central, index)
 
-	C.setup(C.int(numpages), C.int(index), C.int(numservers))
+	C.setup(C.int(numpages), C.int(index), C.int(numservers), true)
+
+	for client.killed() == false {
+		time.Sleep(time.Second)
+	}
+	time.Sleep(time.Second)
 }
 
 func CentralSetup(clients map[int]string, numpages int) {
-	MakeCentral(clients, numpages)
+	central := MakeCentral(clients, numpages)
+
+	for central.killed() == false {
+		time.Sleep(time.Second)
+	}
+	time.Sleep(time.Second)
 }

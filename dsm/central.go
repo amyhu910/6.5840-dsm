@@ -1,6 +1,7 @@
 package dsm
 
 import (
+	"fmt"
 	"log"
 	"math"
 	"net"
@@ -19,7 +20,7 @@ import (
 // }
 
 type Owner struct {
-	OwnerID    int
+	OwnerAddr  string
 	AccessType int
 }
 
@@ -60,7 +61,7 @@ func (c *Central) handleReadWrite(args *ReadWriteArgs, reply *ReadWriteReply) {
 		}
 		c.copyset[args.Addr][args.ClientID] += 1 // TODO: Is the reason we use a map here because it's a "set"? yes
 		reply.Err = OK
-		reply.Owner = c.owner[args.Addr].OwnerID
+		reply.Owner = c.owner[args.Addr].OwnerAddr
 		// c.locks[args.Addr].Unlock()
 	} else if args.Access == 2 {
 		c.invalidateCaches(args.Addr)
@@ -70,8 +71,8 @@ func (c *Central) handleReadWrite(args *ReadWriteArgs, reply *ReadWriteReply) {
 			// c.locks[args.Addr].Lock()
 		}
 		reply.Err = OK
-		reply.Owner = c.owner[args.Addr].OwnerID
-		c.owner[args.Addr] = Owner{OwnerID: args.ClientID, AccessType: 2}
+		reply.Owner = c.owner[args.Addr].OwnerAddr
+		c.owner[args.Addr] = Owner{OwnerAddr: c.clients[args.ClientID], AccessType: 2}
 		// c.locks[args.Addr].Unlock()
 	}
 }
@@ -84,14 +85,26 @@ func (c *Central) invalidateCaches(pageID uintptr) {
 		return
 	}
 	if owner, ok := c.owner[pageID]; ok {
-		go c.makeInvalid(pageID, owner.OwnerID)
+		go c.makeInvalidOwner(pageID, owner.OwnerAddr)
 	}
 	for clientID, _ := range copyset {
-		go c.makeInvalid(pageID, clientID)
+		go c.makeInvalidCopyset(pageID, clientID)
 	}
 }
 
-func (c *Central) makeInvalid(addr uintptr, clientID int) {
+func (c *Central) makeInvalidOwner(addr uintptr, clientAddr string) {
+	args := InvalidateArgs{Addr: addr, NewAccess: 0, ReturnPage: false}
+	reply := InvalidateReply{}
+	ok := call(clientAddr, "Client.ChangeAccess", &args, &reply)
+	// err := c.clients[clientID].Call("Client.ChangeAccess", &args, &reply)
+	for !ok {
+		// Wait until expires
+		ok = call(clientAddr, "Client.ChangeAccess", &args, &reply)
+		// err = c.clients[clientID].Call("Client.ChangeAccess", &args, &reply)
+	}
+}
+
+func (c *Central) makeInvalidCopyset(addr uintptr, clientID int) {
 	args := InvalidateArgs{Addr: addr, NewAccess: 0, ReturnPage: false}
 	reply := InvalidateReply{}
 	ok := call(c.clients[clientID], "Client.ChangeAccess", &args, &reply)
@@ -104,6 +117,18 @@ func (c *Central) makeInvalid(addr uintptr, clientID int) {
 	delete(c.copyset[addr], clientID)
 }
 
+func (c *Central) addClient(NewClientArgs *NewClientArgs, reply *NewClientReply) {
+	c.clients[NewClientArgs.Id] = NewClientArgs.Addr
+	reply.Err = OK
+	for _, page := range NewClientArgs.Pages {
+		if _, ok := c.copyset[page]; ok {
+			// page already exists - handle somehow?
+		}
+		c.copyset[page] = make(map[int]int)
+		c.owner[page] = Owner{OwnerAddr: NewClientArgs.Addr, AccessType: 2}
+	}
+}
+
 func (c *Central) initialize(clients map[int]string, numpages int) {
 	c.clients = make(map[int]string)
 	go c.initializeRPC()
@@ -114,24 +139,25 @@ func (c *Central) initialize(clients map[int]string, numpages int) {
 
 	for i := 0; i < numpages; i++ {
 		id := int(math.Floor(float64(numpages) / float64(i)))
-		c.owner[uintptr(i*PageSize)] = Owner{OwnerID: id, AccessType: 2}
+		c.owner[uintptr(i*PageSize)] = Owner{OwnerAddr: c.clients[id], AccessType: 2}
 	}
 	c.copyset = make(map[uintptr]map[int]int)
 }
 
 func MakeCentral(clients map[int]string, numpages int) *Central {
-	c := &Central{}
+	c := Central{}
 	c.initialize(clients, numpages)
-	return c
+	return &c
 }
 
 func (c *Central) initializeRPC() {
-	rpc.Register(c)
-	l, err := net.Listen("tcp", ":1234")
+	// rpc.Register(c)
+	l, err := net.Listen("tcp", port)
 	if err != nil {
 		log.Fatal("listen error:", err)
 	}
 	defer l.Close()
+	fmt.Println("central server listening on port", port)
 
 	for {
 		conn, err := l.Accept()

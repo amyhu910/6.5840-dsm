@@ -10,7 +10,7 @@ type ReadWriteArgs struct {
 
 type ReadWriteReply struct {
 	Err   Err
-	Owner int
+	Owner string
 	// Lease Lease
 }
 
@@ -34,4 +34,14 @@ type InvalidateArgs struct {
 type InvalidateReply struct {
 	Err  Err
 	Data []byte
+}
+
+type NewClientArgs struct {
+	Id    int
+	Addr  string
+	Pages []uintptr
+}
+
+type NewClientReply struct {
+	Err Err
 }

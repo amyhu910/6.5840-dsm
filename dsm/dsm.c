@@ -5,6 +5,7 @@
 #include <string.h>
 #include <signal.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <sys/mman.h>
 #include <sys/resource.h>
 #include <math.h>
@@ -27,6 +28,7 @@ void *align_down(void *addr) {
 static void
 handle_sigsegv(int sig, siginfo_t *info, void *ctx)
 {
+    printf("Handling SIGSEGV\n");
     uintptr_t pg;
 
     pg = (uintptr_t)align_down((void *) info->si_addr);
@@ -47,9 +49,10 @@ handle_sigsegv(int sig, siginfo_t *info, void *ctx)
 }
 
 void
-setup(int num_pages, int index, int total_servers) {
+setup(int num_pages, int index, int total_servers, bool call_tests) {
     // set up sigsegv handler
     // MakeClient("localhost:8080", "localhost:8081", index);
+    printf("Setting up SIGSEGV handler\n");
     struct sigaction act;
     act.sa_sigaction = handle_sigsegv;
     act.sa_flags = SA_SIGINFO;
@@ -60,28 +63,92 @@ setup(int num_pages, int index, int total_servers) {
     }
 
     // map all pages as PROT_NONE
+    printf("Mapping all pages as PROT_NONE\n");
     char *p = mmap(NULL, num_pages * page_size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (p == MAP_FAILED) {
         fprintf(stderr, "Couldn't mmap memory; %s\n", strerror(errno));
         exit(EXIT_FAILURE);
     }
 
-    int curpage = (int)floor((index / total_servers) * num_pages);
-    int nextpage = (int)floor(((index + 1) / total_servers) * num_pages);
+    int curpage = (int)floor((index / (double)total_servers) * num_pages);
+    int nextpage = (int)floor(((index + 1) / (double)total_servers) * num_pages);
 
+    printf("Setting up pages with read write permissions\n");
     for (int i = curpage; i < nextpage; i++) {
         // set up the page at index to be read/write
         mprotect(p + i * page_size, page_size, PROT_READ | PROT_WRITE);
     }
+
+    if (call_tests) {
+        test_legal_read(num_pages, index, total_servers, p);
+        test_legal_write(num_pages, index, total_servers, p);
+        test_illegal_read(num_pages, index, total_servers, p);
+        test_illegal_write(num_pages, index, total_servers, p);
+    }
 }
 
+void test_legal_read(int num_pages, int index, int total_servers, char*p) {
+    printf("Testing legal read\n");
+    int curpage = (int)floor((index / (double)total_servers) * num_pages);
+
+    int* ptr = (int*)(p + curpage * page_size);
+
+    // Dereference the pointer to read the value
+    int value = *ptr;
+    printf("Value: %d\n", value);
+    printf("Legal read passed with no errors\n");
+    // No errors should occur
+}
+
+void test_legal_write(int num_pages, int index, int total_servers, char *p) {
+    printf("Testing legal write\n");
+    int curpage = (int)floor((index / (double)total_servers) * num_pages);
+
+    int* ptr = (int*)(p + curpage * page_size);
+
+    // Dereference the pointer to write the value
+    *ptr = 42;
+    printf("Value: %d\n", *ptr);
+    printf("Legal write passed with no errors\n");
+    // No errors should occur
+}
+
+void test_illegal_read(int num_pages, int index, int total_servers, char *p) {
+    printf("Testing illegal read\n");
+    int wrongindex = (index + 1) % total_servers;
+    int curpage = (int)floor((wrongindex / (double)total_servers) * num_pages);
+
+    int* ptr = (int*)(p + curpage * page_size);
+
+    // Dereference the pointer to read the value
+    int value = *ptr;
+    printf("Value: %d\n", value);
+    printf("Illegal read passed with no errors\n");
+    // Segfault should be called
+}
+
+void test_illegal_write(int num_pages, int index, int total_servers, char *p) {
+    printf("Testing illegal write\n");
+    int wrongindex = (index + 1) % total_servers;
+    int curpage = (int)floor((wrongindex / (double)total_servers) * num_pages);
+
+    int* ptr = (int*)(p + curpage * page_size);
+
+    // Dereference the pointer to write the value
+    *ptr = 42;
+    printf("Value: %d\n", *ptr);
+    printf("Illegal write passed with no errors\n");
+    // No errors should occur
+}
 void 
 change_access(uintptr_t addr, int NEW_PROT) {
+    printf("Changing access\n");
     // set up the page at index to be read-only
     mprotect((void *)addr, page_size, NEW_PROT);
 }
 
 void *get_page(uintptr_t addr) {
+    printf("Getting page\n");
     void *page_start = align_down((void *)addr);
 
     // Allocate memory to hold the page copy
@@ -98,6 +165,7 @@ void *get_page(uintptr_t addr) {
 }
 
 void set_page(uintptr_t addr, void *data) {
+    printf("Setting page\n");
     void *page_start = align_down((void *)addr);
     uintptr_t offset = (uintptr_t)addr - (uintptr_t)page_start;
     memcpy(page_start + offset, data, page_size);

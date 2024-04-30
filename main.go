@@ -19,14 +19,16 @@ func main() {
 			}
 			dsm.CentralSetup(clients, numpages)
 		} else if args == "-p" {
-
-			numservers := 2
+			numservers := 1
 			index, err := strconv.Atoi(os.Args[i+1])
 			if err != nil {
 				log.Fatal("could not parse index", err)
 			}
-			peer := os.Args[i+2]
-			central := os.Args[i+3]
+			central := os.Args[i+2]
+			peer := ""
+			if i+3 < len(os.Args) {
+				peer = os.Args[i+3]
+			}
 			dsm.ClientSetup(numpages, index, numservers, peer, central)
 		} else if args == "-h" {
 			fmt.Println("If you want to run a central server, use the -c flag followed by the addresses of the clients.")
