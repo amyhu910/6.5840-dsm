@@ -66,8 +66,13 @@ setup(int num_pages, int index, int total_servers) {
         exit(EXIT_FAILURE);
     }
 
-    // set up the page at index to be read/write
-    mprotect(p + index * page_size, page_size, PROT_READ | PROT_WRITE);
+    int curpage = (int)floor((index / total_servers) * num_pages);
+    int nextpage = (int)floor(((index + 1) / total_servers) * num_pages);
+
+    for (int i = curpage; i < nextpage; i++) {
+        // set up the page at index to be read/write
+        mprotect(p + i * page_size, page_size, PROT_READ | PROT_WRITE);
+    }
 }
 
 void 

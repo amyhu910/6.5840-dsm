@@ -10,15 +10,16 @@ import (
 )
 
 func main() {
+	numpages := 10
 	for i, args := range os.Args {
 		if args == "-c" {
 			clients := make(map[int]string)
 			for j := i + 1; j < len(os.Args); j++ {
 				clients[j] = os.Args[j]
 			}
-			dsm.CentralSetup(clients)
+			dsm.CentralSetup(clients, numpages)
 		} else if args == "-p" {
-			numpages := 10
+
 			numservers := 2
 			index, err := strconv.Atoi(os.Args[i+1])
 			if err != nil {

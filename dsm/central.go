@@ -2,6 +2,7 @@ package dsm
 
 import (
 	"log"
+	"math"
 	"net"
 	"net/rpc"
 	"sync/atomic"
@@ -103,19 +104,24 @@ func (c *Central) makeInvalid(addr uintptr, clientID int) {
 	delete(c.copyset[addr], clientID)
 }
 
-func (c *Central) initialize(clients map[int]string) {
+func (c *Central) initialize(clients map[int]string, numpages int) {
 	c.clients = make(map[int]string)
 	go c.initializeRPC()
 	for id, addr := range clients {
 		c.clients[id] = addr
 	}
-	c.copyset = make(map[uintptr]map[int]int)
 	c.owner = make(map[uintptr]Owner)
+
+	for i := 0; i < numpages; i++ {
+		id := int(math.Floor(float64(numpages) / float64(i)))
+		c.owner[uintptr(i*PageSize)] = Owner{OwnerID: id, AccessType: 2}
+	}
+	c.copyset = make(map[uintptr]map[int]int)
 }
 
-func MakeCentral(clients map[int]string) *Central {
+func MakeCentral(clients map[int]string, numpages int) *Central {
 	c := &Central{}
-	c.initialize(clients)
+	c.initialize(clients, numpages)
 	return c
 }
 

@@ -169,6 +169,6 @@ func ClientSetup(numpages int, index int, numservers int, peer string, central s
 	C.setup(C.int(numpages), C.int(index), C.int(numservers))
 }
 
-func CentralSetup(clients map[int]string) {
-	MakeCentral(clients)
+func CentralSetup(clients map[int]string, numpages int) {
+	MakeCentral(clients, numpages)
 }
