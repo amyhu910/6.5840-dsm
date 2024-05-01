@@ -28,7 +28,7 @@ void *align_down(void *addr) {
 }
 
 void *get_pa(void *va) {
-    return (void *)(((uintptr_t)p + (uintptr_t)va) & ~(page_size - 1));
+    return (void *)(((uintptr_t)p + (uintptr_t)va));
 }
 
 static void
@@ -93,6 +93,11 @@ setup(int num_pages, int index, int total_servers, bool call_tests) {
     for (int i = curpage; i < nextpage; i++) {
         // set up the page at index to be read/write
         mprotect(p + i * page_size, page_size, PROT_READ | PROT_WRITE);
+        int* ptr = (int*)(p + i * page_size);
+
+        // Dereference the pointer to write the value
+        *ptr = index;
+        printf("Setting page %p: %d\n", p + i * page_size, *ptr);
     }
 
     if (call_tests) {
@@ -164,8 +169,8 @@ change_access(uintptr_t addr, int NEW_PROT) {
 }
 
 void *get_page(uintptr_t addr) {
-    printf("Getting page\n");
     void *page_start = get_pa((void *)addr);
+    printf("Getting page %p: %d\n", page_start, *(int *)page_start);
 
     // Allocate memory to hold the page copy
     void *page_copy = malloc(page_size);
@@ -181,8 +186,8 @@ void *get_page(uintptr_t addr) {
 }
 
 void set_page(uintptr_t addr, void *data) {
-    printf("Setting page\n");
     void *page_start = get_pa((void *)addr);
+    printf("Setting page %p\n", page_start);
     mprotect((void *)page_start, page_size, PROT_WRITE);
     memcpy(page_start, data, page_size);
 }
