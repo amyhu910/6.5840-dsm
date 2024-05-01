@@ -11,6 +11,7 @@ type ReadWriteArgs struct {
 type ReadWriteReply struct {
 	Err   Err
 	Owner string
+	Data  []byte
 	// Lease Lease
 }
 

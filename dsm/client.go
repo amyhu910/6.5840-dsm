@@ -47,12 +47,14 @@ var client *Client
 func (c *Client) HandlePageRequest(args *PageRequestArgs, reply *PageRequestReply) error {
 	// lock page somehow
 	fmt.Println("handling page request on go side")
+	reply.Data = C.GoBytes(C.get_page(C.uintptr_t(args.Addr)), C.int(PageSize))
 	if args.RequestType == 1 {
+		// change to read access
 		C.change_access(C.uintptr_t(args.Addr), 1)
 	} else if args.RequestType == 2 {
+		// change to write access
 		C.change_access(C.uintptr_t(args.Addr), 0)
 	}
-	reply.Data = C.GoBytes(C.get_page(C.uintptr_t(args.Addr)), C.int(PageSize))
 	return nil
 }
 
@@ -68,14 +70,14 @@ func HandleRead(addr C.uintptr_t) *C.char {
 func (c *Client) handleRead(addr uintptr) []byte {
 	fmt.Println("handling read on go side")
 	ownerReply := &ReadWriteReply{}
+	// get owner of page
 	ok := call(c.central, "Central.HandleReadWrite", &ReadWriteArgs{ClientID: c.id, Addr: addr, Access: 1}, ownerReply)
-	// err := c.central.Call("Central.handleReadWrite", &ReadWriteArgs{ClientID: c.id, Addr: addr, Access: 1}, ownerReply)
 	if !ok {
 		return nil
 	}
 	pageReply := &PageRequestReply{}
+	// get page data
 	ok = call(ownerReply.Owner, "Client.HandlePageRequest", &PageRequestArgs{Addr: addr, RequestType: 1}, pageReply)
-	// err = c.peers[ownerReply.Owner].Call("Client.handlePageRequest", &PageRequestArgs{Addr: addr, RequestType: 1}, pageReply)
 	if !ok {
 		return nil
 	}
@@ -90,24 +92,19 @@ func HandleWrite(addr C.uintptr_t) {
 func (c *Client) handleWrite(addr uintptr) {
 	fmt.Println("handling write on go side")
 	ownerReply := &ReadWriteReply{}
+	// invalidate caches and load page
 	ok := call(c.central, "Central.HandleReadWrite", &ReadWriteArgs{ClientID: c.id, Addr: addr, Access: 2}, ownerReply)
-	// err := c.central.Call("Central.handleReadWrite", &ReadWriteArgs{ClientID: c.id, Addr: addr, Access: 2}, ownerReply)
 	if !ok {
 		return
 	}
 	if ownerReply.Err != OK {
 		return
 	}
-	pageReply := &PageRequestReply{}
-	if ownerReply.Owner != "" {
-		ok = call(ownerReply.Owner, "Client.HandlePageRequest", &PageRequestArgs{Addr: addr, RequestType: 2}, pageReply)
-		// err = c.peers[ownerReply.Owner].Call("Client.handlePageRequest", &PageRequestArgs{Addr: addr, RequestType: 2}, pageReply)
-	}
-	if !ok {
-		return
-	}
+	// change access to write
 	C.change_access(C.uintptr_t(addr), 2)
-	C.set_page(C.uintptr_t(addr), C.CBytes(pageReply.Data))
+
+	// write to page
+	C.set_page(C.uintptr_t(addr), C.CBytes(ownerReply.Data))
 }
 
 func (c *Client) ChangeAccess(args *InvalidateArgs, reply *InvalidateReply) error {
@@ -120,6 +117,11 @@ func (c *Client) ChangeAccess(args *InvalidateArgs, reply *InvalidateReply) erro
 }
 
 func call(addr string, rpcname string, args interface{}, reply interface{}) bool {
+	if addr == "" {
+		fmt.Println("invalid address")
+		for {
+		}
+	}
 	client, err := rpc.Dial("tcp", addr+port)
 	fmt.Println("dialing", addr+port)
 	if err != nil {
@@ -144,13 +146,6 @@ func (c *Client) initialize(peerAddr string, centralAddr string, me int) {
 	c.id = me
 }
 
-// //export MakeClient
-// func MakeClient(peers *C.char, centralAddr *C.char, me C.int) {
-// 	c := &Client{}
-// 	c.initialize(C.GoString(peers), C.GoString(centralAddr), int(me))
-// 	client = c
-// }
-
 func MakeClient(peers string, centralAddr string, me int) {
 	c := &Client{}
 	c.initialize(peers, centralAddr, me)
@@ -158,7 +153,7 @@ func MakeClient(peers string, centralAddr string, me int) {
 }
 
 func (c *Client) initializeRPC() {
-	// rpc.Register(c)
+	rpc.Register(c)
 	l, err := net.Listen("tcp", port)
 	if err != nil {
 		log.Fatal("listen error:", err)
