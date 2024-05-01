@@ -159,7 +159,8 @@ func ClientSetup(numpages int, index int, numservers int, central string) {
 	// MakeClient("localhost:8080", "localhost:8081", index)
 	MakeClient(central, index)
 
-	C.setup(C.int(numpages), C.int(index), C.int(numservers), false)
+	C.setup(C.int(numpages), C.int(index), C.int(numservers))
+	C.test_one_client(C.int(numpages), C.int(index), C.int(numservers))
 
 	for client.killed() == false {
 		time.Sleep(time.Second)

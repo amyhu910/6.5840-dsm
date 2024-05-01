@@ -55,7 +55,7 @@ handle_sigsegv(int sig, siginfo_t *info, void *ctx)
 }
 
 void
-setup(int num_pages, int index, int total_servers, bool call_tests) {
+setup(int num_pages, int index, int total_servers) {
     // set up sigsegv handler
     // MakeClient("localhost:8080", "localhost:8081", index);
     printf("Setting up SIGSEGV handler\n");
@@ -99,13 +99,22 @@ setup(int num_pages, int index, int total_servers, bool call_tests) {
         *ptr = index;
         printf("Setting page %p: %d\n", p + i * page_size, *ptr);
     }
+}
 
-    if (call_tests) {
+void test_one_client(int num_pages, int index, int total_servers) {
+    printf("Testing one client\n");
+    if (index == 0) {
         test_legal_read(num_pages, index, total_servers);
         test_legal_write(num_pages, index, total_servers);
         test_illegal_read(num_pages, index, total_servers);
         test_illegal_write(num_pages, index, total_servers);
+        test_invalid_illegal_write(num_pages, index, total_servers);
     }
+}
+
+void test_concurrent_clients(int num_pages, int index, int total_servers) {
+    printf("Testing concurrent clients\n");
+    test_legal_read_concur(num_pages, index, total_servers);
 }
 
 void test_legal_read(int num_pages, int index, int total_servers) {
@@ -161,7 +170,36 @@ void test_illegal_write(int num_pages, int index, int total_servers) {
     printf("Illegal write passed with no errors\n");
     // No errors should occur
 }
-void 
+
+void test_invalid_illegal_write(int num_pages, int index, int total_servers) {
+    // TODO: Currently assumes that each clients has at least 2 pages allocated to it
+    printf("Testing illegal write to invalid page\n");
+    int wrongindex = (index + 1) % total_servers;
+    int curpage = (int)floor((wrongindex / (double)total_servers) * num_pages) + 1;
+
+    int* ptr = (int*)(p + curpage * page_size);
+
+    // Dereference the pointer to write the value
+    *ptr = 42;
+    printf("Value: %d\n", *ptr);
+    printf("Illegal write passed with no errors\n");
+    // No errors should occur
+}
+
+void test_legal_read_concur(int num_pages, int index, int total_servers) {
+    // TODO: Currently assumes that each client has at least 3 pages allocated to it
+    printf("Testing legal concurrent reads\n");
+    int curpage = (int)floor((index / (double)total_servers) * num_pages) + 3;
+
+    int* ptr = (int*)(p + curpage * page_size);
+
+    // Dereference the pointer to read the value
+    int value = *ptr;
+    printf("Value: %d\n", value);
+    printf("Legal read passed with no errors\n");
+    // No errors should occur
+}
+
 change_access(uintptr_t addr, int NEW_PROT) {
     printf("Changing access to %i\n", NEW_PROT);
     // set up the page at index to be read-only
