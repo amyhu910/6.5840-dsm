@@ -26,7 +26,6 @@ var PageSize = syscall.Getpagesize()
 const port = ":1234"
 
 type Client struct {
-	peers   map[int]string
 	central string
 	id      int
 	dead    int32 // for testing
@@ -126,14 +125,15 @@ func call(addr string, rpcname string, args interface{}, reply interface{}) bool
 	return false
 }
 
-func (c *Client) initialize(centralAddr string) {
+func (c *Client) initialize(centralAddr string, me int) {
 	go c.initializeRPC()
 	c.central = centralAddr
+	c.id = me
 }
 
-func MakeClient(centralAddr string) {
+func MakeClient(centralAddr string, me int) {
 	c := &Client{}
-	c.initialize(centralAddr)
+	c.initialize(centralAddr, me)
 	client = c
 }
 
@@ -157,7 +157,7 @@ func (c *Client) initializeRPC() {
 
 func ClientSetup(numpages int, index int, numservers int, central string) {
 	// MakeClient("localhost:8080", "localhost:8081", index)
-	MakeClient(central)
+	MakeClient(central, index)
 
 	C.setup(C.int(numpages), C.int(index), C.int(numservers), false)
 
