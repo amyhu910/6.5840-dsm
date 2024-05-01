@@ -54,7 +54,7 @@ func (c *Central) killed() bool {
 // }
 
 func (c *Central) HandleReadWrite(args *ReadWriteArgs, reply *ReadWriteReply) error {
-	fmt.Println("central handling read write on go side")
+	fmt.Println("central handling read write on go side", args.Addr)
 	if args.Access == 1 {
 		// c.lockPage(args.Addr)
 		// make owner readonly

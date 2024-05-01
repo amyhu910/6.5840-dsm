@@ -50,7 +50,7 @@ handle_sigsegv(int sig, siginfo_t *info, void *ctx)
     if (prot & PROT_READ) {
         HandleWrite((uintptr_t) info->si_addr -  (uintptr_t) p);
     } else {
-        memcpy(&pg, HandleRead((uintptr_t) info->si_addr - (uintptr_t) p), page_size);
+        HandleRead((uintptr_t) info->si_addr - (uintptr_t) p);
     }
 }
 
@@ -99,7 +99,7 @@ setup(int num_pages, int index, int total_servers, bool call_tests) {
         test_legal_read(num_pages, index, total_servers);
         test_legal_write(num_pages, index, total_servers);
         test_illegal_read(num_pages, index, total_servers);
-        // test_illegal_write(num_pages, index, total_servers, p);
+        test_illegal_write(num_pages, index, total_servers);
     }
 }
 
@@ -158,7 +158,7 @@ void test_illegal_write(int num_pages, int index, int total_servers) {
 }
 void 
 change_access(uintptr_t addr, int NEW_PROT) {
-    printf("Changing access\n");
+    printf("Changing access to %i\n", NEW_PROT);
     // set up the page at index to be read-only
     mprotect((void *)p + addr, page_size, NEW_PROT);
 }
@@ -183,6 +183,6 @@ void *get_page(uintptr_t addr) {
 void set_page(uintptr_t addr, void *data) {
     printf("Setting page\n");
     void *page_start = get_pa((void *)addr);
-    uintptr_t offset = (uintptr_t)addr - (uintptr_t)page_start;
-    memcpy(page_start + offset, data, page_size);
+    mprotect((void *)page_start, page_size, PROT_WRITE);
+    memcpy(page_start, data, page_size);
 }
