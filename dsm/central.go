@@ -6,6 +6,7 @@ import (
 	"math"
 	"net"
 	"net/rpc"
+	"sync"
 	"sync/atomic"
 )
 
@@ -29,7 +30,7 @@ type Central struct {
 	clients map[int]string
 	copyset map[uintptr]map[int]int
 	owner   map[uintptr]Owner
-	// locks   map[int]*sync.Mutex //I think we don't need to use references for mutexes: https://www.reddit.com/r/golang/comments/u9o5wj/mutex_struct_field_as_reference_or_value/
+	locks   map[uintptr]*sync.Mutex
 	// mu      sync.Mutex
 	dead int32 // for testing
 }
@@ -44,19 +45,10 @@ func (c *Central) killed() bool {
 	return z == 1
 }
 
-// func (c *Central) lockPage(pageID int) {
-// 	c.mu.Lock()
-// 	defer c.mu.Unlock()
-// 	if _, ok := c.locks[pageID]; !ok {
-// 		c.locks[pageID] = &sync.Mutex{}
-// 	}
-// 	c.locks[pageID].Lock()
-// }
-
 func (c *Central) HandleReadWrite(args *ReadWriteArgs, reply *ReadWriteReply) error {
 	fmt.Println("central handling read write on go side", args.Addr)
 	if args.Access == 1 {
-		// c.lockPage(args.Addr)
+		c.locks[args.Addr].Lock()
 		// make owner readonly
 		go c.makeReadonlyOwner(args.Addr, c.owner[args.Addr].OwnerAddr)
 		if _, ok := c.copyset[args.Addr]; !ok {
@@ -66,37 +58,39 @@ func (c *Central) HandleReadWrite(args *ReadWriteArgs, reply *ReadWriteReply) er
 		c.copyset[args.Addr][args.ClientID] += 1
 		reply.Err = OK
 		reply.Owner = c.owner[args.Addr].OwnerAddr
-		// c.locks[args.Addr].Unlock()
+		c.locks[args.Addr].Unlock()
 	} else if args.Access == 2 {
 		// invalidate all pages and return data
 		reply.Data = c.invalidateCaches(args.Addr)
-		// c.locks[args.Addr].Lock()
+		c.locks[args.Addr].Lock()
 		// wait for invalidation to finish
 		for len(c.copyset[args.Addr]) > 0 {
-			// c.locks[args.Addr].Unlock()
-			// c.locks[args.Addr].Lock()
+			c.locks[args.Addr].Unlock()
+			c.locks[args.Addr].Lock()
 		}
 		reply.Err = OK
 		// update owner
 		c.owner[args.Addr] = Owner{OwnerAddr: c.clients[args.ClientID], AccessType: 2}
-		// c.locks[args.Addr].Unlock()
+		c.locks[args.Addr].Unlock()
 	}
 	return nil
 }
 
 func (c *Central) invalidateCaches(pageID uintptr) []byte {
-	// c.lockPage(pageID)
-	// defer c.locks[pageID].Unlock()
+	c.locks[pageID].Lock()
 	copyset, ok := c.copyset[pageID]
 	if !ok || len(copyset) == 0 {
+		c.locks[pageID].Unlock()
 		return nil
 	}
 	for clientID, _ := range copyset {
 		go c.makeInvalidCopyset(pageID, clientID)
 	}
 	if owner, ok := c.owner[pageID]; ok {
+		c.locks[pageID].Unlock()
 		return c.makeInvalidOwner(pageID, owner.OwnerAddr)
 	}
+	c.locks[pageID].Unlock()
 	return nil
 }
 
@@ -109,7 +103,9 @@ func (c *Central) makeReadonlyOwner(addr uintptr, clientAddr string) {
 		// Wait until expires
 		ok = call(clientAddr, "Client.ChangeAccess", &args, &reply)
 	}
+	c.locks[addr].Lock()
 	c.owner[addr] = Owner{OwnerAddr: clientAddr, AccessType: 1}
+	c.locks[addr].Unlock()
 }
 
 func (c *Central) makeInvalidOwner(addr uintptr, clientAddr string) []byte {
@@ -121,7 +117,9 @@ func (c *Central) makeInvalidOwner(addr uintptr, clientAddr string) []byte {
 		// Wait until expires
 		ok = call(clientAddr, "Client.ChangeAccess", &args, &reply)
 	}
+	c.locks[addr].Lock()
 	c.owner[addr] = Owner{OwnerAddr: clientAddr, AccessType: 0}
+	c.locks[addr].Unlock()
 	return reply.Data
 }
 
@@ -134,7 +132,9 @@ func (c *Central) makeInvalidCopyset(addr uintptr, clientID int) {
 		// Wait until expires
 		ok = call(c.clients[clientID], "Client.ChangeAccess", &args, &reply)
 	}
+	c.locks[addr].Lock()
 	delete(c.copyset[addr], clientID)
+	c.locks[addr].Unlock()
 }
 
 // func (c *Central) AddClient(NewClientArgs *NewClientArgs, reply *NewClientReply) error {
@@ -152,7 +152,7 @@ func (c *Central) makeInvalidCopyset(addr uintptr, clientID int) {
 func (c *Central) initialize(clients map[int]string, numpages int) {
 	c.clients = make(map[int]string)
 	c.owner = make(map[uintptr]Owner)
-	go c.initializeRPC()
+	c.locks = make(map[uintptr]*sync.Mutex)
 	for id, addr := range clients {
 		c.clients[id] = addr
 		curpage := (id * numpages) / len(clients)
@@ -161,9 +161,11 @@ func (c *Central) initialize(clients map[int]string, numpages int) {
 		nextpage = int(math.Floor(float64(nextpage)))
 		for j := curpage; j < nextpage; j++ {
 			c.owner[uintptr(j*PageSize)] = Owner{OwnerAddr: addr, AccessType: 2}
+			c.locks[uintptr(j*PageSize)] = &sync.Mutex{}
 		}
 	}
 	c.copyset = make(map[uintptr]map[int]int)
+	go c.initializeRPC()
 }
 
 func MakeCentral(clients map[int]string, numpages int) *Central {
