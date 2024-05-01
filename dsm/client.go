@@ -114,7 +114,7 @@ func call(addr string, rpcname string, args interface{}, reply interface{}) bool
 	client, err := rpc.Dial("tcp", addr+port)
 	fmt.Println("dialing", addr+port)
 	if err != nil {
-		log.Fatal("could not connect to central", err)
+		log.Fatal(fmt.Sprintf("could not connect to %v", addr), err)
 	}
 	defer client.Close()
 	fmt.Println("connected to", addr)
