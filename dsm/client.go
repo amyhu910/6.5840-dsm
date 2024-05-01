@@ -126,18 +126,14 @@ func call(addr string, rpcname string, args interface{}, reply interface{}) bool
 	return false
 }
 
-func (c *Client) initialize(peerAddr string, centralAddr string, me int) {
-	c.peers = make(map[int]string)
-	id := 1 - me
-	c.peers[id] = peerAddr
+func (c *Client) initialize(centralAddr string) {
 	go c.initializeRPC()
 	c.central = centralAddr
-	c.id = me
 }
 
-func MakeClient(peers string, centralAddr string, me int) {
+func MakeClient(centralAddr string) {
 	c := &Client{}
-	c.initialize(peers, centralAddr, me)
+	c.initialize(centralAddr)
 	client = c
 }
 
@@ -159,9 +155,9 @@ func (c *Client) initializeRPC() {
 	}
 }
 
-func ClientSetup(numpages int, index int, numservers int, peer string, central string) {
+func ClientSetup(numpages int, index int, numservers int, central string) {
 	// MakeClient("localhost:8080", "localhost:8081", index)
-	MakeClient(peer, central, index)
+	MakeClient(central)
 
 	C.setup(C.int(numpages), C.int(index), C.int(numservers), false)
 
