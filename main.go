@@ -15,7 +15,7 @@ func main() {
 		if args == "-c" {
 			clients := make(map[int]string)
 			for j := i + 1; j < len(os.Args); j++ {
-				clients[j] = os.Args[j]
+				clients[j-2] = os.Args[j]
 			}
 			dsm.CentralSetup(clients, numpages)
 		} else if args == "-p" {

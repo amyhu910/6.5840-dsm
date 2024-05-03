@@ -109,6 +109,7 @@ void test_one_client(int num_pages, int index, int total_servers) {
         test_illegal_read(num_pages, index, total_servers);
         test_illegal_write(num_pages, index, total_servers);
         test_invalid_illegal_write(num_pages, index, total_servers);
+        printf("All tests passed\n");
     }
 }
 
