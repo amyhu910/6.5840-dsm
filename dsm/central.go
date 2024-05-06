@@ -80,6 +80,9 @@ func (c *Central) HandleReadWrite(args *ReadWriteArgs, reply *ReadWriteReply) er
 		c.locks[args.Addr].Unlock()
 	} else if args.Access == 2 {
 		// invalidate all pages and return data
+		c.locks[args.Addr].Lock()
+		delete(c.copyset[args.Addr], args.ClientID)
+		c.locks[args.Addr].Unlock()
 		reply.Data = c.invalidateCaches(args.Addr)
 		c.locks[args.Addr].Lock()
 		// wait for invalidation to finish
@@ -97,19 +100,17 @@ func (c *Central) HandleReadWrite(args *ReadWriteArgs, reply *ReadWriteReply) er
 
 func (c *Central) invalidateCaches(pageID uintptr) []byte {
 	c.locks[pageID].Lock()
+	defer c.locks[pageID].Unlock()
 	copyset, ok := c.copyset[pageID]
 	if !ok || len(copyset) == 0 {
-		c.locks[pageID].Unlock()
 		return nil
 	}
 	for clientID, _ := range copyset {
 		go c.makeInvalidCopyset(pageID, clientID)
 	}
 	if owner, ok := c.owner[pageID]; ok {
-		c.locks[pageID].Unlock()
 		return c.makeInvalidOwner(pageID, owner.OwnerAddr)
 	}
-	c.locks[pageID].Unlock()
 	return nil
 }
 

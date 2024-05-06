@@ -182,13 +182,23 @@ func ClientSetup(numpages int, index int, numservers int, central string) {
 	// MakeClient("localhost:8080", "localhost:8081", index)
 	MakeClient(central, index)
 
-	C.setup(C.int(numpages), C.int(index), C.int(numservers))
+	// C.setup(C.int(numpages), C.int(index), C.int(numservers))
 	// C.test_one_client(C.int(numpages), C.int(index), C.int(numservers))
+
+	// for client.killed() == false {
+	// 	time.Sleep(time.Second)
+	// 	if client.ready {
+	// 		C.test_concurrent_clients(C.int(numpages), C.int(index), C.int(numservers))
+	// 		break
+	// 	}
+	// }
+
+	C.setup_matmul(C.int(index), C.int(numservers))
 
 	for client.killed() == false {
 		time.Sleep(time.Second)
 		if client.ready {
-			C.test_concurrent_clients(C.int(numpages), C.int(index), C.int(numservers))
+			C.multiply_matrices(C.int(index), C.int(numservers))
 			break
 		}
 	}

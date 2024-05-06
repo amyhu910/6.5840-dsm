@@ -2,6 +2,8 @@
     "files.associations": {
         "unistd.h": "c",
         "variant": "c",
-        "chrono": "c"
+        "chrono": "c",
+        "mman.h": "c",
+        "stdint.h": "c"
     }
 }
