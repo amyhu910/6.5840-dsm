@@ -1,24 +1,12 @@
 package dsm
 
 import (
-	"fmt"
 	"log"
-	"math"
 	"net"
 	"net/rpc"
 	"sync"
 	"sync/atomic"
 )
-
-// const (
-// 	LeaseDuration = 10 * time.Second
-// )
-
-// type Lease struct {
-// 	Owner int
-// 	Valid bool
-// 	Start time.Time
-// }
 
 type Owner struct {
 	OwnerAddr  string
@@ -65,42 +53,42 @@ func (c *Central) allClientsRegistered() {
 }
 
 func (c *Central) HandleReadWrite(args *ReadWriteArgs, reply *ReadWriteReply) error {
-	fmt.Println("central handling read write on go side", args.Addr)
+	c.locks[args.Addr].Lock()
+	defer c.locks[args.Addr].Unlock()
+	log.Println("owner", c.owner)
+	log.Println("copyset", c.copyset)
 	if args.Access == 1 {
-		c.locks[args.Addr].Lock()
+		log.Println("central handling read on go side", args.Addr, c.clients[args.ClientID])
 		// make owner readonly
-		go c.makeReadonlyOwner(args.Addr, c.owner[args.Addr].OwnerAddr)
+		c.makeReadonlyOwner(args.Addr, c.owner[args.Addr].OwnerAddr)
 		if _, ok := c.copyset[args.Addr]; !ok {
 			c.copyset[args.Addr] = make(map[int]int)
 		}
 		// update copyset
-		c.copyset[args.Addr][args.ClientID] += 1
+		c.copyset[args.Addr][args.ClientID] = 1
 		reply.Err = OK
 		reply.Owner = c.owner[args.Addr].OwnerAddr
-		c.locks[args.Addr].Unlock()
+
 	} else if args.Access == 2 {
+		log.Println("central handling write on go side", args.Addr, c.clients[args.ClientID])
 		// invalidate all pages and return data
-		c.locks[args.Addr].Lock()
 		delete(c.copyset[args.Addr], args.ClientID)
-		c.locks[args.Addr].Unlock()
 		reply.Data = c.invalidateCaches(args.Addr)
-		c.locks[args.Addr].Lock()
 		// wait for invalidation to finish
 		for len(c.copyset[args.Addr]) > 0 {
-			c.locks[args.Addr].Unlock()
-			c.locks[args.Addr].Lock()
 		}
 		reply.Err = OK
 		// update owner
 		c.owner[args.Addr] = Owner{OwnerAddr: c.clients[args.ClientID], AccessType: 2}
-		c.locks[args.Addr].Unlock()
 	}
+	log.Println("done handling")
 	return nil
 }
 
 func (c *Central) invalidateCaches(pageID uintptr) []byte {
-	c.locks[pageID].Lock()
-	defer c.locks[pageID].Unlock()
+	// c.locks[pageID].Lock()
+	// defer c.locks[pageID].Unlock()
+	log.Println("owner", c.owner)
 	copyset, ok := c.copyset[pageID]
 	if !ok || len(copyset) == 0 {
 		return nil
@@ -115,7 +103,7 @@ func (c *Central) invalidateCaches(pageID uintptr) []byte {
 }
 
 func (c *Central) makeReadonlyOwner(addr uintptr, clientAddr string) {
-	fmt.Println("make readonly owner")
+	log.Println("make readonly owner")
 	args := InvalidateArgs{Addr: addr, NewAccess: 1, ReturnPage: false}
 	reply := InvalidateReply{}
 	ok := call(clientAddr, "Client.ChangeAccess", &args, &reply)
@@ -123,13 +111,13 @@ func (c *Central) makeReadonlyOwner(addr uintptr, clientAddr string) {
 		// Wait until expires
 		ok = call(clientAddr, "Client.ChangeAccess", &args, &reply)
 	}
-	c.locks[addr].Lock()
+	// c.locks[addr].Lock()
 	c.owner[addr] = Owner{OwnerAddr: clientAddr, AccessType: 1}
-	c.locks[addr].Unlock()
+	// c.locks[addr].Unlock()
 }
 
 func (c *Central) makeInvalidOwner(addr uintptr, clientAddr string) []byte {
-	fmt.Println("make invalid owner")
+	log.Println("make invalid owner")
 	args := InvalidateArgs{Addr: addr, NewAccess: 0, ReturnPage: true}
 	reply := InvalidateReply{}
 	ok := call(clientAddr, "Client.ChangeAccess", &args, &reply)
@@ -137,14 +125,14 @@ func (c *Central) makeInvalidOwner(addr uintptr, clientAddr string) []byte {
 		// Wait until expires
 		ok = call(clientAddr, "Client.ChangeAccess", &args, &reply)
 	}
-	c.locks[addr].Lock()
+	// c.locks[addr].Lock()
 	c.owner[addr] = Owner{OwnerAddr: clientAddr, AccessType: 0}
-	c.locks[addr].Unlock()
+	// c.locks[addr].Unlock()
 	return reply.Data
 }
 
 func (c *Central) makeInvalidCopyset(addr uintptr, clientID int) {
-	fmt.Println("make invalid copyset")
+	log.Println("make invalid copyset")
 	args := InvalidateArgs{Addr: addr, NewAccess: 0, ReturnPage: false}
 	reply := InvalidateReply{}
 	ok := call(c.clients[clientID], "Client.ChangeAccess", &args, &reply)
@@ -152,22 +140,10 @@ func (c *Central) makeInvalidCopyset(addr uintptr, clientID int) {
 		// Wait until expires
 		ok = call(c.clients[clientID], "Client.ChangeAccess", &args, &reply)
 	}
-	c.locks[addr].Lock()
+	// c.locks[addr].Lock()
 	delete(c.copyset[addr], clientID)
-	c.locks[addr].Unlock()
+	// c.locks[addr].Unlock()
 }
-
-// func (c *Central) AddClient(NewClientArgs *NewClientArgs, reply *NewClientReply) error {
-// 	c.clients[NewClientArgs.Id] = NewClientArgs.Addr
-// 	reply.Err = OK
-// 	for _, page := range NewClientArgs.Pages {
-// 		if _, ok := c.copyset[page]; ok {
-// 			// page already exists - handle somehow?
-// 		}
-// 		c.copyset[page] = make(map[int]int)
-// 		c.owner[page] = Owner{OwnerAddr: NewClientArgs.Addr, AccessType: 2}
-// 	}
-// }
 
 func (c *Central) initialize(clients map[int]string, numpages int) {
 	c.clients = make(map[int]string)
@@ -176,15 +152,22 @@ func (c *Central) initialize(clients map[int]string, numpages int) {
 	c.locks = make(map[uintptr]*sync.Mutex)
 	for id, addr := range clients {
 		c.clients[id] = addr
-		curpage := (id * numpages) / len(clients)
-		curpage = int(math.Floor(float64(curpage)))
-		nextpage := ((id + 1) * numpages) / len(clients)
-		nextpage = int(math.Floor(float64(nextpage)))
-		for j := curpage; j < nextpage; j++ {
-			c.owner[uintptr(j*PageSize)] = Owner{OwnerAddr: addr, AccessType: 2}
-			c.locks[uintptr(j*PageSize)] = &sync.Mutex{}
-		}
 	}
+	for i := 0; i < numpages; i++ {
+		c.owner[uintptr(i*PageSize)] = Owner{OwnerAddr: c.clients[0], AccessType: 2}
+		c.locks[uintptr(i*PageSize)] = &sync.Mutex{}
+	}
+	// for id, addr := range clients {
+	// 	c.clients[id] = addr
+	// 	curpage := (id * numpages) / len(clients)
+	// 	curpage = int(math.Floor(float64(curpage)))
+	// 	nextpage := ((id + 1) * numpages) / len(clients)
+	// 	nextpage = int(math.Floor(float64(nextpage)))
+	// 	for j := curpage; j < nextpage; j++ {
+	// 		c.owner[uintptr(j*PageSize)] = Owner{OwnerAddr: addr, AccessType: 2}
+	// 		c.locks[uintptr(j*PageSize)] = &sync.Mutex{}
+	// 	}
+	// }
 	c.copyset = make(map[uintptr]map[int]int)
 	go c.initializeRPC()
 }
@@ -202,7 +185,7 @@ func (c *Central) initializeRPC() {
 		log.Fatal("listen error:", err)
 	}
 	defer l.Close()
-	fmt.Println("central server listening on port", port)
+	log.Println("central server listening on port", port)
 
 	for {
 		conn, err := l.Accept()

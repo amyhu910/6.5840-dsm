@@ -45,7 +45,7 @@ func (c *Client) killed() bool {
 }
 
 func (c *Client) AllClientsRegistered(args *Args, reply *Reply) error {
-	fmt.Println("all clients registered")
+	log.Println("all clients registered")
 	c.ready = true
 	return nil
 }
@@ -54,7 +54,7 @@ var client *Client
 
 func (c *Client) HandlePageRequest(args *PageRequestArgs, reply *PageRequestReply) error {
 	// lock page somehow
-	fmt.Println("handling page request on go side", args.Addr)
+	log.Println("handling page request on go side", args.Addr)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	reply.Data = C.GoBytes(C.get_page(C.uintptr_t(args.Addr)), C.int(PageSize))
@@ -67,21 +67,21 @@ func HandleRead(addr C.uintptr_t) {
 }
 
 func (c *Client) handleRead(addr uintptr) {
-	fmt.Println("handling read on go side", addr)
+	log.Println("handling read on go side", addr)
+	c.mu.Lock()
 	ownerReply := &ReadWriteReply{}
 	// get owner of page
 	ok := call(c.central, "Central.HandleReadWrite", &ReadWriteArgs{ClientID: c.id, Addr: addr, Access: 1}, ownerReply)
 	if !ok {
-		fmt.Println("error could not get owner of page")
+		log.Println("error could not get owner of page")
 	}
 	pageReply := &PageRequestReply{}
 	// get page data
 	ok = call(ownerReply.Owner, "Client.HandlePageRequest", &PageRequestArgs{Addr: addr, RequestType: 1}, pageReply)
 	if !ok {
-		fmt.Println("error could not get page data")
+		log.Println("error could not get page data")
 	}
 	// write to page
-	c.mu.Lock()
 	C.set_page(C.uintptr_t(addr), C.CBytes(pageReply.Data))
 	C.change_access(C.uintptr_t(addr), 1)
 	c.mu.Unlock()
@@ -93,7 +93,8 @@ func HandleWrite(addr C.uintptr_t) {
 }
 
 func (c *Client) handleWrite(addr uintptr) {
-	fmt.Println("handling write on go side", addr)
+	log.Println("handling write on go side", addr)
+	c.mu.Lock()
 	ownerReply := &ReadWriteReply{}
 	// invalidate caches and load page
 	ok := call(c.central, "Central.HandleReadWrite", &ReadWriteArgs{ClientID: c.id, Addr: addr, Access: 2}, ownerReply)
@@ -104,7 +105,6 @@ func (c *Client) handleWrite(addr uintptr) {
 		return
 	}
 	// write to page
-	c.mu.Lock()
 	C.set_page(C.uintptr_t(addr), C.CBytes(ownerReply.Data))
 	c.mu.Unlock()
 }
@@ -114,8 +114,9 @@ func (c *Client) ChangeAccess(args *InvalidateArgs, reply *InvalidateReply) erro
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if args.ReturnPage {
-		fmt.Println("changing access on go side and returning page first", args.Addr)
+		log.Println("changing access on go side and returning page first", args.Addr)
 		reply.Data = C.GoBytes(C.get_page(C.uintptr_t(args.Addr)), C.int(PageSize))
+		log.Println("returned data", reply.Data)
 	}
 	C.change_access(C.uintptr_t(args.Addr), C.int(args.NewAccess))
 	return nil
@@ -123,18 +124,18 @@ func (c *Client) ChangeAccess(args *InvalidateArgs, reply *InvalidateReply) erro
 
 func call(addr string, rpcname string, args interface{}, reply interface{}) bool {
 	if addr == "" {
-		fmt.Println("invalid address")
+		log.Println("invalid address")
 		for {
 		}
 	}
 	client, err := rpc.Dial("tcp", addr+port)
-	fmt.Println("dialing", addr+port)
+	log.Println("dialing", addr+port)
 	if err != nil {
 		log.Fatal(fmt.Sprintf("could not connect to %v", addr), err)
 	}
 	defer client.Close()
-	fmt.Println("connected to", addr)
-	fmt.Println("calling", rpcname)
+	log.Println("connected to", addr)
+	log.Println("calling", rpcname)
 	err = client.Call(rpcname, args, reply)
 	if err == nil {
 		return true
@@ -150,7 +151,7 @@ func (c *Client) initialize(centralAddr string, me int) {
 	reply := &RegisterReply{}
 	ok := call(c.central, "Central.RegisterClient", &RegisterArgs{ClientID: c.id}, reply)
 	if !ok {
-		fmt.Println("error could not register client")
+		log.Println("error could not register client")
 	}
 }
 
@@ -167,7 +168,7 @@ func (c *Client) initializeRPC() {
 		log.Fatal("listen error:", err)
 	}
 	defer l.Close()
-	fmt.Println("client server listening on port", port)
+	log.Println("client server listening on port", port)
 
 	for {
 		conn, err := l.Accept()
