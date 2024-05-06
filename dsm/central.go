@@ -55,8 +55,8 @@ func (c *Central) allClientsRegistered() {
 func (c *Central) HandleReadWrite(args *ReadWriteArgs, reply *ReadWriteReply) error {
 	c.locks[args.Addr].Lock()
 	defer c.locks[args.Addr].Unlock()
-	log.Println("owner", c.owner)
-	log.Println("copyset", c.copyset)
+	// log.Println("owner", c.owner)
+	// log.Println("copyset", c.copyset)
 	if args.Access == 1 {
 		log.Println("central handling read on go side", args.Addr, c.clients[args.ClientID])
 		// make owner readonly
@@ -88,13 +88,12 @@ func (c *Central) HandleReadWrite(args *ReadWriteArgs, reply *ReadWriteReply) er
 func (c *Central) invalidateCaches(pageID uintptr) []byte {
 	// c.locks[pageID].Lock()
 	// defer c.locks[pageID].Unlock()
-	log.Println("owner", c.owner)
 	copyset, ok := c.copyset[pageID]
-	if !ok || len(copyset) == 0 {
-		return nil
-	}
-	for clientID, _ := range copyset {
-		go c.makeInvalidCopyset(pageID, clientID)
+	if ok {
+		for clientID, _ := range copyset {
+			log.Println(c.clients[clientID])
+			go c.makeInvalidCopyset(pageID, clientID)
+		}
 	}
 	if owner, ok := c.owner[pageID]; ok {
 		return c.makeInvalidOwner(pageID, owner.OwnerAddr)

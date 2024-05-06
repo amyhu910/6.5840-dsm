@@ -116,7 +116,6 @@ func (c *Client) ChangeAccess(args *InvalidateArgs, reply *InvalidateReply) erro
 	if args.ReturnPage {
 		log.Println("changing access on go side and returning page first", args.Addr)
 		reply.Data = C.GoBytes(C.get_page(C.uintptr_t(args.Addr)), C.int(PageSize))
-		log.Println("returned data", reply.Data)
 	}
 	C.change_access(C.uintptr_t(args.Addr), C.int(args.NewAccess))
 	return nil
