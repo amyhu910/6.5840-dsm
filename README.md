@@ -21,7 +21,7 @@ For client 1:
 
 For client 2: 
 ```bash
-./6.5840-dsm -p 1 2 ip1
+./6.5840-dsm -p 1 2 ip0
 ```
 
 To get help, try the following command:
