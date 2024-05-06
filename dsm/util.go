@@ -2,6 +2,19 @@ package dsm
 
 type Err string
 
+type Args struct{}
+
+type Reply struct {
+}
+
+type RegisterArgs struct {
+	ClientID int
+}
+
+type RegisterReply struct {
+	Err Err
+}
+
 type ReadWriteArgs struct {
 	ClientID int
 	Addr     uintptr

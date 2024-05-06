@@ -115,7 +115,8 @@ void test_one_client(int num_pages, int index, int total_servers) {
 
 void test_concurrent_clients(int num_pages, int index, int total_servers) {
     printf("Testing concurrent clients\n");
-    test_legal_read_concur(num_pages, index, total_servers);
+    test_illegal_read_concur(num_pages, index, total_servers);
+    test_illegal_write_concur(num_pages, index, total_servers);
 }
 
 void test_legal_read(int num_pages, int index, int total_servers) {
@@ -187,21 +188,33 @@ void test_invalid_illegal_write(int num_pages, int index, int total_servers) {
     // No errors should occur
 }
 
-void test_legal_read_concur(int num_pages, int index, int total_servers) {
-    // TODO: Currently assumes that each client has at least 3 pages allocated to it
-    printf("Testing legal concurrent reads\n");
-    int curpage = (int)floor((index / (double)total_servers) * num_pages) + 3;
+void test_illegal_read_concur(int num_pages, int index, int total_servers) {
+    printf("Testing illegal read concurrently\n");
+    for (int i = 0; i < num_pages; i++) {
+        // set up the page at index to be read/write
+        int* ptr = (int*)(p + i * page_size);
 
-    int* ptr = (int*)(p + curpage * page_size);
-
-    // Dereference the pointer to read the value
-    int value = *ptr;
-    printf("Value: %d\n", value);
-    printf("Legal read passed with no errors\n");
-    // No errors should occur
+        // Dereference the pointer to read the value
+        int value = *ptr;
+        printf("Value: %d\n", value);
+    }
+    printf("All concurrent read tests passed\n");
 }
 
-change_access(uintptr_t addr, int NEW_PROT) {
+void test_illegal_write_concur(int num_pages, int index, int total_servers) {
+    printf("Testing illegal write concurrently\n");
+    for (int i = 0; i < num_pages; i++) {
+        // set up the page at index to be read/write
+        int* ptr = (int*)(p + i * page_size);
+
+        // Dereference the pointer to read the value
+        *ptr = 10 * index + 1;
+        printf("Value: %d\n", *ptr);
+    }
+    printf("All concurrent write tests passed\n");
+}
+
+void change_access(uintptr_t addr, int NEW_PROT) {
     printf("Changing access to %i\n", NEW_PROT);
     // set up the page at index to be read-only
     mprotect((void *)p + addr, page_size, NEW_PROT);

@@ -9,6 +9,7 @@ import "C"
 import (
 	"fmt"
 	"log"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -29,6 +30,8 @@ type Client struct {
 	central string
 	id      int
 	dead    int32 // for testing
+	mu      sync.Mutex
+	ready   bool
 }
 
 func (c *Client) Kill() {
@@ -41,11 +44,19 @@ func (c *Client) killed() bool {
 	return z == 1
 }
 
+func (c *Client) AllClientsRegistered(args *Args, reply *Reply) error {
+	fmt.Println("all clients registered")
+	c.ready = true
+	return nil
+}
+
 var client *Client
 
 func (c *Client) HandlePageRequest(args *PageRequestArgs, reply *PageRequestReply) error {
 	// lock page somehow
 	fmt.Println("handling page request on go side", args.Addr)
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	reply.Data = C.GoBytes(C.get_page(C.uintptr_t(args.Addr)), C.int(PageSize))
 	return nil
 }
@@ -70,8 +81,10 @@ func (c *Client) handleRead(addr uintptr) {
 		fmt.Println("error could not get page data")
 	}
 	// write to page
+	c.mu.Lock()
 	C.set_page(C.uintptr_t(addr), C.CBytes(pageReply.Data))
 	C.change_access(C.uintptr_t(addr), 1)
+	c.mu.Unlock()
 }
 
 //export HandleWrite
@@ -91,11 +104,15 @@ func (c *Client) handleWrite(addr uintptr) {
 		return
 	}
 	// write to page
+	c.mu.Lock()
 	C.set_page(C.uintptr_t(addr), C.CBytes(ownerReply.Data))
+	c.mu.Unlock()
 }
 
 func (c *Client) ChangeAccess(args *InvalidateArgs, reply *InvalidateReply) error {
 	// lock page somehow
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if args.ReturnPage {
 		fmt.Println("changing access on go side and returning page first", args.Addr)
 		reply.Data = C.GoBytes(C.get_page(C.uintptr_t(args.Addr)), C.int(PageSize))
@@ -129,6 +146,12 @@ func (c *Client) initialize(centralAddr string, me int) {
 	go c.initializeRPC()
 	c.central = centralAddr
 	c.id = me
+	c.mu = sync.Mutex{}
+	reply := &RegisterReply{}
+	ok := call(c.central, "Central.RegisterClient", &RegisterArgs{ClientID: c.id}, reply)
+	if !ok {
+		fmt.Println("error could not register client")
+	}
 }
 
 func MakeClient(centralAddr string, me int) {
@@ -160,8 +183,15 @@ func ClientSetup(numpages int, index int, numservers int, central string) {
 	MakeClient(central, index)
 
 	C.setup(C.int(numpages), C.int(index), C.int(numservers))
-	C.test_one_client(C.int(numpages), C.int(index), C.int(numservers))
+	// C.test_one_client(C.int(numpages), C.int(index), C.int(numservers))
 
+	for client.killed() == false {
+		time.Sleep(time.Second)
+		if client.ready {
+			C.test_concurrent_clients(C.int(numpages), C.int(index), C.int(numservers))
+			break
+		}
+	}
 	for client.killed() == false {
 		time.Sleep(time.Second)
 	}

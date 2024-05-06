@@ -27,10 +27,12 @@ type Owner struct {
 
 type Central struct {
 	// The central's name
-	clients map[int]string
-	copyset map[uintptr]map[int]int
-	owner   map[uintptr]Owner
-	locks   map[uintptr]*sync.Mutex
+	num_clients int
+	register    map[int]bool
+	clients     map[int]string
+	copyset     map[uintptr]map[int]int
+	owner       map[uintptr]Owner
+	locks       map[uintptr]*sync.Mutex
 	// mu      sync.Mutex
 	dead int32 // for testing
 }
@@ -43,6 +45,23 @@ func (c *Central) Kill() {
 func (c *Central) killed() bool {
 	z := atomic.LoadInt32(&c.dead)
 	return z == 1
+}
+
+func (c *Central) RegisterClient(args *RegisterArgs, reply *RegisterReply) error {
+	c.register[args.ClientID] = true
+	c.num_clients++
+	if c.num_clients == len(c.clients) {
+		// all clients have registered
+		go c.allClientsRegistered()
+	}
+	reply.Err = OK
+	return nil
+}
+
+func (c *Central) allClientsRegistered() {
+	for id, _ := range c.clients {
+		call(c.clients[id], "Client.AllClientsRegistered", Args{}, Reply{})
+	}
 }
 
 func (c *Central) HandleReadWrite(args *ReadWriteArgs, reply *ReadWriteReply) error {
@@ -151,6 +170,7 @@ func (c *Central) makeInvalidCopyset(addr uintptr, clientID int) {
 
 func (c *Central) initialize(clients map[int]string, numpages int) {
 	c.clients = make(map[int]string)
+	c.register = make(map[int]bool)
 	c.owner = make(map[uintptr]Owner)
 	c.locks = make(map[uintptr]*sync.Mutex)
 	for id, addr := range clients {
