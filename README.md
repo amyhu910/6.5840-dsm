@@ -5,7 +5,7 @@ This DSM implementation is based on the IVY design, in which there is one centra
 
 In particular, pages are pre-allocated to machines during the setup phase. Each machine is assigned an index which will determine which set of pages it is assigned during initialization. At any given point in time, a page can either be 1. read-write on exactly one machine and invalid on all others or 2. read-only on any number of machines. The library will handle all page faults and grant the necessary permissions to complete an operation. 
 
-To run your own functions, import your C code into the `dsm` folder. Call the relevant C functions in the `ClientSetup` function in `dsm/client.go`.
+To run your own functions, import your C code into the `dsm` folder (see `matmul.c` for an example). Call the relevant C functions in the `ClientSetup` function in `dsm/client.go`.
 
 To start running the DSM, import all code to the relevant machines. Compile at each machine using `go build`. Then, if you are to run the code with one central server and two clients with IP addresses `ip0`, `ip1`, and `ip2` respectively, you can run the following commands at each machine to create a DSM with `numpages` pages.
 
