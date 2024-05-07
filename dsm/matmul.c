@@ -16,13 +16,12 @@
 #define COL_A 64
 #define ROW_B 64
 #define COL_B 64
-#define num_pages 12
 
 int* matrixA;
 int* matrixB;
 int* matrixC;
 
-void setup_matmul(int index, int total_servers) {
+void setup_matmul(int num_pages, int index, int total_servers) {
     setup_handler();
 
     // map all pages as PROT_READ | PROT_WRITE

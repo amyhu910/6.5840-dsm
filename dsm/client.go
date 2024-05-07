@@ -68,7 +68,6 @@ func HandleRead(addr C.uintptr_t) {
 
 func (c *Client) handleRead(addr uintptr) {
 	log.Println("handling read on go side", addr)
-	c.mu.Lock()
 	ownerReply := &ReadWriteReply{}
 	// get owner of page
 	ok := call(c.central, "Central.HandleReadWrite", &ReadWriteArgs{ClientID: c.id, Addr: addr, Access: 1}, ownerReply)
@@ -82,6 +81,8 @@ func (c *Client) handleRead(addr uintptr) {
 		log.Println("error could not get page data")
 	}
 	// write to page
+
+	c.mu.Lock()
 	C.set_page(C.uintptr_t(addr), C.CBytes(pageReply.Data))
 	C.change_access(C.uintptr_t(addr), 1)
 	c.mu.Unlock()
@@ -94,7 +95,6 @@ func HandleWrite(addr C.uintptr_t) {
 
 func (c *Client) handleWrite(addr uintptr) {
 	log.Println("handling write on go side", addr)
-	c.mu.Lock()
 	ownerReply := &ReadWriteReply{}
 	// invalidate caches and load page
 	ok := call(c.central, "Central.HandleReadWrite", &ReadWriteArgs{ClientID: c.id, Addr: addr, Access: 2}, ownerReply)
@@ -105,6 +105,7 @@ func (c *Client) handleWrite(addr uintptr) {
 		return
 	}
 	// write to page
+	c.mu.Lock()
 	C.set_page(C.uintptr_t(addr), C.CBytes(ownerReply.Data))
 	c.mu.Unlock()
 }
