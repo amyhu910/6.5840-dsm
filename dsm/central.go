@@ -55,8 +55,8 @@ func (c *Central) allClientsRegistered() {
 func (c *Central) HandleReadWrite(args *ReadWriteArgs, reply *ReadWriteReply) error {
 	c.locks[args.Addr].Lock()
 	defer c.locks[args.Addr].Unlock()
-	// log.Println("owner", c.owner)
-	// log.Println("copyset", c.copyset)
+	log.Println("owner", c.owner)
+	log.Println("copyset", c.copyset)
 	if args.Access == 1 {
 		log.Println("central handling read on go side", args.Addr, c.clients[args.ClientID])
 		// make owner readonly
@@ -73,7 +73,7 @@ func (c *Central) HandleReadWrite(args *ReadWriteArgs, reply *ReadWriteReply) er
 		log.Println("central handling write on go side", args.Addr, c.clients[args.ClientID])
 		// invalidate all pages and return data
 		delete(c.copyset[args.Addr], args.ClientID)
-		reply.Data = c.invalidateCaches(args.Addr)
+		reply.Data = c.invalidateCaches(args.Addr, args.ClientID)
 		// wait for invalidation to finish
 		for len(c.copyset[args.Addr]) > 0 {
 		}
@@ -85,24 +85,27 @@ func (c *Central) HandleReadWrite(args *ReadWriteArgs, reply *ReadWriteReply) er
 	return nil
 }
 
-func (c *Central) invalidateCaches(pageID uintptr) []byte {
+func (c *Central) invalidateCaches(pageID uintptr, thisClient int) []byte {
 	// c.locks[pageID].Lock()
 	// defer c.locks[pageID].Unlock()
 	copyset, ok := c.copyset[pageID]
 	if ok {
 		for clientID, _ := range copyset {
+			if clientID == thisClient {
+				continue
+			}
 			log.Println(c.clients[clientID])
 			go c.makeInvalidCopyset(pageID, clientID)
 		}
 	}
-	if owner, ok := c.owner[pageID]; ok {
+	if owner, ok := c.owner[pageID]; ok && owner.OwnerAddr != c.clients[thisClient] {
 		return c.makeInvalidOwner(pageID, owner.OwnerAddr)
 	}
 	return nil
 }
 
 func (c *Central) makeReadonlyOwner(addr uintptr, clientAddr string) {
-	log.Println("make readonly owner")
+	log.Println("make readonly owner", clientAddr)
 	args := InvalidateArgs{Addr: addr, NewAccess: 1, ReturnPage: false}
 	reply := InvalidateReply{}
 	ok := call(clientAddr, "Client.ChangeAccess", &args, &reply)
@@ -116,7 +119,7 @@ func (c *Central) makeReadonlyOwner(addr uintptr, clientAddr string) {
 }
 
 func (c *Central) makeInvalidOwner(addr uintptr, clientAddr string) []byte {
-	log.Println("make invalid owner")
+	log.Println("make invalid owner", clientAddr)
 	args := InvalidateArgs{Addr: addr, NewAccess: 0, ReturnPage: true}
 	reply := InvalidateReply{}
 	ok := call(clientAddr, "Client.ChangeAccess", &args, &reply)
@@ -131,7 +134,7 @@ func (c *Central) makeInvalidOwner(addr uintptr, clientAddr string) []byte {
 }
 
 func (c *Central) makeInvalidCopyset(addr uintptr, clientID int) {
-	log.Println("make invalid copyset")
+	log.Println("make invalid copyset", c.clients[clientID])
 	args := InvalidateArgs{Addr: addr, NewAccess: 0, ReturnPage: false}
 	reply := InvalidateReply{}
 	ok := call(c.clients[clientID], "Client.ChangeAccess", &args, &reply)
@@ -156,6 +159,7 @@ func (c *Central) initialize(clients map[int]string, numpages int) {
 		c.owner[uintptr(i*PageSize)] = Owner{OwnerAddr: c.clients[0], AccessType: 2}
 		c.locks[uintptr(i*PageSize)] = &sync.Mutex{}
 	}
+	log.Println(c.owner)
 	// for id, addr := range clients {
 	// 	c.clients[id] = addr
 	// 	curpage := (id * numpages) / len(clients)

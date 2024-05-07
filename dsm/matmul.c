@@ -12,10 +12,10 @@
 #include "dsm.h"
 #include "_cgo_export.h"
 
-#define ROW_A 3
-#define COL_A 3
-#define ROW_B 3
-#define COL_B 3
+#define ROW_A 64
+#define COL_A 64
+#define ROW_B 64
+#define COL_B 64
 #define num_pages 12
 
 int* matrixA;
@@ -53,6 +53,10 @@ void setup_matmul(int index, int total_servers) {
         matrixA = (int *)p;
         matrixB = (int *)(p + PAGE_SIZE * 4);
         matrixC = (int *)(p + PAGE_SIZE * 8);
+        if (p == MAP_FAILED) {
+            fprintf(stderr, "Couldn't mmap memory; %s\n", strerror(errno));
+            exit(EXIT_FAILURE);
+        }
     }
 }
 
@@ -73,9 +77,11 @@ void multiply_matrices(int index, int total_servers) {
 
     for (i =start; i < end; i++) {
         for (j = 0; j < COL_B; j++) {
+            int val = 0;
             for (k = 0; k < COL_A; k++) {
-                matrixC[i * COL_B + j] += matrixA[i * COL_A + k] * matrixB[k * COL_B + j];
+                val += matrixA[i * COL_A + k] * matrixB[k * COL_B + j];
             }
+            matrixC[i * COL_B + j] = val;
         }
     }
     printf("Matrix C:\n");
