@@ -7,26 +7,24 @@ In particular, pages are pre-allocated to machines during the setup phase. Each 
 
 To run your own functions, import your C code into the `dsm` folder. Call the relevant C functions in the `ClientSetup` function in `dsm/client.go`.
 
-To start running the DSM, import all code to the relevant machines. Compile at each machine using `go build`. Then, if you are to run the code with one central server and two clients with IP addresses `ip0`, `ip1`, and `ip2` respectively, you can run the following commands at each machine. 
+To start running the DSM, import all code to the relevant machines. Compile at each machine using `go build`. Then, if you are to run the code with one central server and two clients with IP addresses `ip0`, `ip1`, and `ip2` respectively, you can run the following commands at each machine to create a DSM with `numpages` pages.
 
 For the central server:
 ```bash
-./6.5840-dsm -c ip1 ip2
+./6.5840-dsm -c numpages ip1 ip2
 ```
 
 For client 1:
 ```bash
-./6.5840-dsm -p 0 2 ip0
+./6.5840-dsm -p 0 2 numpages ip0
 ```
 
 For client 2: 
 ```bash
-./6.5840-dsm -p 1 2 ip0
+./6.5840-dsm -p 1 2 numpages ip0
 ```
 
 To get help, try the following command:
 ```bash
 ./6.5840-dsm -h
 ```
-
-To adjust the number of pages allocated to the DSM, adjust the `numpages` variable in `main.go`. 
