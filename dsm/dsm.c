@@ -73,8 +73,8 @@ void setup_handler() {
     }
 }
 
-void create_pages(int num_pages, int PROT) {
-    p = mmap(NULL, num_pages * PAGE_SIZE, PROT, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+void create_pages(int num_pages) {
+    p = mmap(NULL, num_pages * PAGE_SIZE, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (p == MAP_FAILED) {
         fprintf(stderr, "Couldn't mmap memory; %s\n", strerror(errno));
         exit(EXIT_FAILURE);
@@ -89,7 +89,7 @@ setup(int num_pages, int index, int total_servers) {
 
     // map all pages as PROT_NONE
     printf("Mapping all pages as PROT_NONE\n");
-    create_pages(num_pages, PROT_NONE);
+    create_pages(num_pages);
 
     int curpage = (int)floor((index / (double)total_servers) * num_pages);
     int nextpage = (int)floor(((index + 1) / (double)total_servers) * num_pages);
@@ -97,7 +97,6 @@ setup(int num_pages, int index, int total_servers) {
     printf("Setting up pages %i through %i with read write permissions\n", curpage, nextpage);
     for (int i = curpage; i < nextpage; i++) {
         // set up the page at index to be read/write
-        mprotect(p + i * PAGE_SIZE, PAGE_SIZE, PROT_READ | PROT_WRITE);
         int* ptr = (int*)(p + i * PAGE_SIZE);
 
         // Dereference the pointer to write the value
@@ -130,9 +129,11 @@ void test_legal_read(int num_pages, int index, int total_servers) {
     printf("Testing legal read\n");
     int curpage = (int)floor((index / (double)total_servers) * num_pages);
 
+    printf("Getting pointer\n");
     int* ptr = (int*)(p + curpage * PAGE_SIZE);
 
     // Dereference the pointer to read the value
+    printf("Deferencing pointer\n");
     int value = *ptr;
     printf("Value: %d\n", value);
     printf("Legal read passed with no errors\n");
@@ -143,9 +144,11 @@ void test_legal_write(int num_pages, int index, int total_servers) {
     printf("Testing legal write\n");
     int curpage = (int)floor((index / (double)total_servers) * num_pages);
 
+    printf("Getting pointer\n");
     int* ptr = (int*)(p + curpage * PAGE_SIZE);
 
     // Dereference the pointer to write the value
+    printf("Deferencing pointer\n");
     *ptr = 42;
     printf("Value: %d\n", *ptr);
     printf("Legal write passed with no errors\n");
@@ -157,9 +160,11 @@ void test_illegal_read(int num_pages, int index, int total_servers) {
     int wrongindex = (index + 1) % total_servers;
     int curpage = (int)floor((wrongindex / (double)total_servers) * num_pages);
 
+    printf("Getting pointer\n");
     int* ptr = (int*)(p + curpage * PAGE_SIZE);
 
     // Dereference the pointer to read the value
+    printf("Deferencing pointer\n");
     int value = *ptr;
     printf("Value: %d\n", value);
     printf("Illegal read passed with no errors\n");
@@ -171,9 +176,11 @@ void test_illegal_read_misaligned(int num_pages, int index, int total_servers) {
     int wrongindex = (index + 1) % total_servers;
     int curpage = (int)floor((wrongindex / (double)total_servers) * num_pages);
 
+    printf("Getting pointer\n");
     int* ptr = (int*)(p + curpage * PAGE_SIZE + 1);
 
     // Dereference the pointer to read the value
+    printf("Deferencing pointer\n");
     int value = *ptr;
     printf("Value: %d\n", value);
     printf("Illegal read passed with no errors\n");
@@ -185,9 +192,11 @@ void test_illegal_write(int num_pages, int index, int total_servers) {
     int wrongindex = (index + 1) % total_servers;
     int curpage = (int)floor((wrongindex / (double)total_servers) * num_pages);
 
+    printf("Getting pointer\n");
     int* ptr = (int*)(p + curpage * PAGE_SIZE);
 
     // Dereference the pointer to write the value
+    printf("Deferencing pointer\n");
     *ptr = 42;
     printf("Value: %d\n", *ptr);
     printf("Illegal write passed with no errors\n");
@@ -199,9 +208,11 @@ void test_illegal_write_misaligned(int num_pages, int index, int total_servers) 
     int wrongindex = (index + 1) % total_servers;
     int curpage = (int)floor((wrongindex / (double)total_servers) * num_pages);
 
+    printf("Getting pointer\n");
     int* ptr = (int*)(p + curpage * PAGE_SIZE + 1);
 
     // Dereference the pointer to write the value
+    printf("Deferencing pointer\n");
     *ptr = 42;
     printf("Value: %d\n", *ptr);
     printf("Illegal write passed with no errors\n");
@@ -214,9 +225,11 @@ void test_invalid_illegal_write(int num_pages, int index, int total_servers) {
     int wrongindex = (index + 1) % total_servers;
     int curpage = (int)floor((wrongindex / (double)total_servers) * num_pages) + 1;
 
+    printf("Getting pointer\n");
     int* ptr = (int*)(p + curpage * PAGE_SIZE);
 
     // Dereference the pointer to write the value
+    printf("Deferencing pointer\n");
     *ptr = 42;
     printf("Value: %d\n", *ptr);
     printf("Illegal write passed with no errors\n");

@@ -197,7 +197,7 @@ func ClientSetup(numpages int, index int, numservers int, central string) {
 	// 	}
 	// }
 
-	C.setup_matmul(C.int(index), C.int(numservers))
+	C.setup_matmul(C.int(numpages), C.int(index), C.int(numservers))
 
 	for client.killed() == false {
 		time.Sleep(time.Second)

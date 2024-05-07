@@ -6,7 +6,7 @@
 #define PAGE_SIZE sysconf(_SC_PAGESIZE)
 
 extern char *p;
-void create_pages(int num_pages, int PROT);
+void create_pages(int num_pages);
 void change_access(uintptr_t addr, int NEW_PROT);
 void *get_page(uintptr_t addr);
 void set_page(uintptr_t addr, void *page_copy);
@@ -29,7 +29,7 @@ void *align_down(void *addr);
 void *get_pa(void *va);
 void setup_handler();
 
-void setup_matmul(int index, int total_servers);
+void setup_matmul(int num_pages, int index, int total_servers);
 void multiply_matrices(int index, int total_servers);
 void print_matrix(int row, int col, int* matrix);
 #endif
