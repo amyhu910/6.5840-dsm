@@ -28,9 +28,10 @@ type ReadWriteArgs struct {
 }
 
 type ReadWriteReply struct {
-	Err   Err
-	Owner string
-	Data  []byte
+	Err      Err
+	HadOwner bool
+	Owner    string
+	Data     []byte
 	// Lease Lease
 }
 

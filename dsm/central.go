@@ -66,15 +66,21 @@ func (c *Central) HandleReadWrite(args *ReadWriteArgs, reply *ReadWriteReply) er
 	if args.Access == 1 {
 		log.Println("central handling read on go side", args.Addr, c.clients[args.ClientID])
 		// make owner readonly
-		c.makeReadonlyOwner(args.Addr, c.owner[args.Addr].OwnerAddr)
+		pageOwner, found := c.owner[args.Addr]
 		if _, ok := c.copyset[args.Addr]; !ok {
 			c.copyset[args.Addr] = make(map[int]int)
 		}
-		// update copyset
-		c.copyset[args.Addr][args.ClientID] = 1
+		if found {
+			c.makeReadonlyOwner(args.Addr, pageOwner.OwnerAddr)
+			// update copyset
+			c.copyset[args.Addr][args.ClientID] = 1
+			reply.HadOwner = true
+		} else {
+			c.owner[args.Addr] = Owner{OwnerAddr: c.clients[args.ClientID], AccessType: 1}
+			reply.HadOwner = false
+		}
 		reply.Err = OK
 		reply.Owner = c.owner[args.Addr].OwnerAddr
-
 	} else if args.Access == 2 {
 		log.Println("central handling write on go side", args.Addr, c.clients[args.ClientID])
 		// invalidate all pages and return data
@@ -164,10 +170,6 @@ func (c *Central) initialize(clients map[int]string, numpages int) {
 	for i := 0; i < numpages; i++ {
 		c.locks[uintptr(i*PageSize)] = &sync.Mutex{}
 	}
-	for i := 0; i < numpages; i++ {
-		c.owner[uintptr(i*PageSize)] = Owner{OwnerAddr: c.clients[0], AccessType: 2}
-	}
-	log.Println(c.owner)
 	// for id, addr := range clients {
 	// 	c.clients[id] = addr
 	// 	curpage := (id * numpages) / len(clients)
