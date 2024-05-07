@@ -55,8 +55,8 @@ var client *Client
 func (c *Client) HandlePageRequest(args *PageRequestArgs, reply *PageRequestReply) error {
 	// lock page somehow
 	log.Println("handling page request on go side", args.Addr)
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	// c.mu.Lock()
+	// defer c.mu.Unlock()
 	reply.Data = C.GoBytes(C.get_page(C.uintptr_t(args.Addr)), C.int(PageSize))
 	return nil
 }
@@ -82,10 +82,12 @@ func (c *Client) handleRead(addr uintptr) {
 	}
 	// write to page
 
-	c.mu.Lock()
+	// c.mu.Lock()
 	C.set_page(C.uintptr_t(addr), C.CBytes(pageReply.Data))
 	C.change_access(C.uintptr_t(addr), 1)
-	c.mu.Unlock()
+	// c.mu.Unlock()
+
+	ok = call(c.central, "Central.HandleConfirmation", &ConfirmationArgs{ClientID: c.id, Addr: addr}, &Reply{})
 }
 
 //export HandleWrite
@@ -105,15 +107,16 @@ func (c *Client) handleWrite(addr uintptr) {
 		return
 	}
 	// write to page
-	c.mu.Lock()
+	// c.mu.Lock()
 	C.set_page(C.uintptr_t(addr), C.CBytes(ownerReply.Data))
-	c.mu.Unlock()
+	// c.mu.Unlock()
+	ok = call(c.central, "Central.HandleConfirmation", &ConfirmationArgs{ClientID: c.id, Addr: addr}, &Reply{})
 }
 
 func (c *Client) ChangeAccess(args *InvalidateArgs, reply *InvalidateReply) error {
 	// lock page somehow
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	// c.mu.Lock()
+	// defer c.mu.Unlock()
 	if args.ReturnPage {
 		log.Println("changing access on go side and returning page first", args.Addr)
 		reply.Data = C.GoBytes(C.get_page(C.uintptr_t(args.Addr)), C.int(PageSize))

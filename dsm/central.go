@@ -52,9 +52,13 @@ func (c *Central) allClientsRegistered() {
 	}
 }
 
+func (c *Central) HandleConfirmation(args *ConfirmationArgs, reply *Reply) error {
+	c.locks[args.Addr].Unlock()
+	return nil
+}
+
 func (c *Central) HandleReadWrite(args *ReadWriteArgs, reply *ReadWriteReply) error {
 	c.locks[args.Addr].Lock()
-	defer c.locks[args.Addr].Unlock()
 	log.Println("owner", c.owner)
 	log.Println("copyset", c.copyset)
 	if args.Access == 1 {
@@ -156,8 +160,10 @@ func (c *Central) initialize(clients map[int]string, numpages int) {
 		c.clients[id] = addr
 	}
 	for i := 0; i < numpages; i++ {
-		c.owner[uintptr(i*PageSize)] = Owner{OwnerAddr: c.clients[0], AccessType: 2}
 		c.locks[uintptr(i*PageSize)] = &sync.Mutex{}
+	}
+	for i := 0; i < numpages; i++ {
+		c.owner[uintptr(i*PageSize)] = Owner{OwnerAddr: c.clients[0], AccessType: 2}
 	}
 	log.Println(c.owner)
 	// for id, addr := range clients {

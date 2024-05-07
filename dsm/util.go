@@ -5,6 +5,12 @@ type Err string
 type Args struct{}
 
 type Reply struct {
+	Err Err
+}
+
+type ConfirmationArgs struct {
+	ClientID int
+	Addr     uintptr
 }
 
 type RegisterArgs struct {
@@ -48,14 +54,4 @@ type InvalidateArgs struct {
 type InvalidateReply struct {
 	Err  Err
 	Data []byte
-}
-
-type NewClientArgs struct {
-	Id    int
-	Addr  string
-	Pages []uintptr
-}
-
-type NewClientReply struct {
-	Err Err
 }
