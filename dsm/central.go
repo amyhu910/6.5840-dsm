@@ -58,6 +58,8 @@ func (c *Central) HandleConfirmation(args *ConfirmationArgs, reply *Reply) error
 }
 
 func (c *Central) HandleReadWrite(args *ReadWriteArgs, reply *ReadWriteReply) error {
+	// Handle no owner starting state
+	// Handle safety checks for no invalidating ourselves
 	c.locks[args.Addr].Lock()
 	log.Println("owner", c.owner)
 	log.Println("copyset", c.copyset)
