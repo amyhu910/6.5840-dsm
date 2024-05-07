@@ -74,16 +74,18 @@ func (c *Client) handleRead(addr uintptr) {
 	if !ok {
 		log.Println("error could not get owner of page")
 	}
-	pageReply := &PageRequestReply{}
-	// get page data
-	ok = call(ownerReply.Owner, "Client.HandlePageRequest", &PageRequestArgs{Addr: addr, RequestType: 1}, pageReply)
-	if !ok {
-		log.Println("error could not get page data")
-	}
-	// write to page
+	if ownerReply.HadOwner {
+		pageReply := &PageRequestReply{}
+		// get page data
+		ok = call(ownerReply.Owner, "Client.HandlePageRequest", &PageRequestArgs{Addr: addr, RequestType: 1}, pageReply)
+		if !ok {
+			log.Println("error could not get page data")
+		}
+		// write to page
 
-	// c.mu.Lock()
-	C.set_page(C.uintptr_t(addr), C.CBytes(pageReply.Data))
+		// c.mu.Lock()
+		C.set_page(C.uintptr_t(addr), C.CBytes(pageReply.Data))
+	}
 	C.change_access(C.uintptr_t(addr), 1)
 	// c.mu.Unlock()
 
