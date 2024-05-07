@@ -53,6 +53,8 @@ func (c *Central) allClientsRegistered() {
 }
 
 func (c *Central) HandleReadWrite(args *ReadWriteArgs, reply *ReadWriteReply) error {
+	// Handle no owner starting state
+	// Handle safety checks for no invalidating ourselves
 	c.locks[args.Addr].Lock()
 	defer c.locks[args.Addr].Unlock()
 	log.Println("owner", c.owner)
