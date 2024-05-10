@@ -32,6 +32,8 @@ type Client struct {
 	dead    int32 // for testing
 	mu      sync.Mutex
 	ready   bool
+
+	prob_owner map[uintptr]string
 }
 
 func (c *Client) Kill() {
@@ -124,6 +126,10 @@ func (c *Client) ChangeAccess(args *InvalidateArgs, reply *InvalidateReply) erro
 		reply.Data = C.GoBytes(C.get_page(C.uintptr_t(args.Addr)), C.int(PageSize))
 	}
 	C.change_access(C.uintptr_t(args.Addr), C.int(args.NewAccess))
+	return nil
+}
+
+func (c *Central) DistributedHandleReadWrite(args *DReadWriteArgs, reply *DReadWriteReply) error {
 	return nil
 }
 

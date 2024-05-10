@@ -56,3 +56,20 @@ type InvalidateReply struct {
 	Err  Err
 	Data []byte
 }
+
+var default_owner_id int = 0
+var default_owner_addr string = "123"
+
+type DReadWriteArgs struct {
+	ClientID int
+	Addr     uintptr
+	Access   int
+}
+
+type DReadWriteReply struct {
+	Err      Err
+	HadOwner bool
+	Owner    string
+	Data     []byte
+	// Lease Lease
+}
