@@ -32,11 +32,6 @@ type Client struct {
 	dead    int32 // for testing
 	mu      sync.Mutex
 	ready   bool
-
-	prob_owner map[uintptr]Owner
-	copyset    map[uintptr]map[int]int
-	owns_page  map[uintptr]bool
-	locks      map[uintptr]*sync.Mutex
 }
 
 func (c *Client) Kill() {
@@ -58,10 +53,7 @@ func (c *Client) AllClientsRegistered(args *Args, reply *Reply) error {
 var client *Client
 
 func (c *Client) HandlePageRequest(args *PageRequestArgs, reply *PageRequestReply) error {
-	// lock page somehow
 	log.Println("handling page request on go side", args.Addr)
-	// c.mu.Lock()
-	// defer c.mu.Unlock()
 	reply.Data = C.GoBytes(C.get_page(C.uintptr_t(args.Addr)), C.int(PageSize))
 	return nil
 }
@@ -73,16 +65,6 @@ func HandleRead(addr C.uintptr_t) {
 
 func (c *Client) handleRead(addr uintptr) {
 	log.Println("handling read on go side", addr)
-	owner, found := c.prob_owner[addr]
-	// Check if page has a set owner yet
-	// TODO: Review assumption that if we're faulting the owner of the page isn't ourselves
-	if found {
-		ownerReply := &DReadWriteReply{}
-		ok := call(owner.OwnerAddr, "Client.DistributedHandleReadWrite", &DReadWriteArgs{ClientID: c.id, Addr: addr, Access: 1}, ownerReply)
-		if !ok {
-			log.Println("error could not get owner of page")
-		}
-	}
 	ownerReply := &ReadWriteReply{}
 	// get owner of page
 	ok := call(c.central, "Central.HandleReadWrite", &ReadWriteArgs{ClientID: c.id, Addr: addr, Access: 1}, ownerReply)
@@ -97,15 +79,12 @@ func (c *Client) handleRead(addr uintptr) {
 			log.Println("error could not get page data")
 		}
 		// write to page
-
-		// c.mu.Lock()
 		C.set_page(C.uintptr_t(addr), C.CBytes(pageReply.Data))
 	} else {
-		var empty []byte
-		C.set_page(C.uintptr_t(addr), C.CBytes(empty))
+		var empty_page []byte
+		C.set_page(C.uintptr_t(addr), C.CBytes(empty_page))
 	}
 	C.change_access(C.uintptr_t(addr), 1)
-	// c.mu.Unlock()
 
 	ok = call(c.central, "Central.HandleConfirmation", &ConfirmationArgs{ClientID: c.id, Addr: addr}, &Reply{})
 }
@@ -127,16 +106,11 @@ func (c *Client) handleWrite(addr uintptr) {
 		return
 	}
 	// write to page
-	// c.mu.Lock()
 	C.set_page(C.uintptr_t(addr), C.CBytes(ownerReply.Data))
-	// c.mu.Unlock()
 	ok = call(c.central, "Central.HandleConfirmation", &ConfirmationArgs{ClientID: c.id, Addr: addr}, &Reply{})
 }
 
 func (c *Client) ChangeAccess(args *InvalidateArgs, reply *InvalidateReply) error {
-	// lock page somehow
-	// c.mu.Lock()
-	// defer c.mu.Unlock()
 	if args.ReturnPage {
 		log.Println("changing access on go side and returning page first", args.Addr)
 		reply.Data = C.GoBytes(C.get_page(C.uintptr_t(args.Addr)), C.int(PageSize))
@@ -170,25 +144,21 @@ func call(addr string, rpcname string, args interface{}, reply interface{}) bool
 	return false
 }
 
-func (c *Client) DistributedHandleReadWrite(args *DReadWriteArgs, reply *DReadWriteReply) error {
-	return nil
-}
-
-func (c *Client) initialize(centralAddr string, numpages int, me int) {
+func (c *Client) initialize(centralAddr string, me int) {
 	go c.initializeRPC()
 	c.central = centralAddr
 	c.id = me
 	c.mu = sync.Mutex{}
-	for i := 0; i < numpages; i++ {
-		c.prob_owner[uintptr(i*PageSize)] = Owner{OwnerAddr: default_owner_addr, AccessType: 2}
-		c.owns_page[uintptr(i*PageSize)] = c.id == default_owner_id
-		c.locks[uintptr(i*PageSize)] = &sync.Mutex{}
+	reply := &RegisterReply{}
+	ok := call(c.central, "Central.RegisterClient", &RegisterArgs{ClientID: c.id}, reply)
+	if !ok {
+		log.Println("error could not register client")
 	}
 }
 
-func MakeClient(centralAddr string, numpages int, me int) {
+func MakeClient(centralAddr string, me int) {
 	c := &Client{}
-	c.initialize(centralAddr, numpages, me)
+	c.initialize(centralAddr, me)
 	client = c
 }
 
@@ -211,8 +181,7 @@ func (c *Client) initializeRPC() {
 }
 
 func ClientSetup(numpages int, index int, numservers int, central string) {
-	// MakeClient("localhost:8080", "localhost:8081", index)
-	MakeClient(central, numpages, index)
+	MakeClient(central, index)
 
 	// C.setup(C.int(numpages), C.int(index), C.int(numservers))
 	// C.test_one_client(C.int(numpages), C.int(index), C.int(numservers))
