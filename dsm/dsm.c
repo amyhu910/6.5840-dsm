@@ -84,7 +84,6 @@ void create_pages(int num_pages) {
 void
 setup(int num_pages, int index, int total_servers) {
     // set up sigsegv handler
-    // MakeClient("localhost:8080", "localhost:8081", index);
     setup_handler();
 
     // map all pages as PROT_NONE

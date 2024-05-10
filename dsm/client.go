@@ -185,7 +185,6 @@ func (c *Client) initializeRPC() {
 }
 
 func ClientSetup(numpages int, index int, numservers int, central string) {
-	// MakeClient("localhost:8080", "localhost:8081", index)
 	MakeClient(central, index)
 
 	// C.setup(C.int(numpages), C.int(index), C.int(numservers))
