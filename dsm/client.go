@@ -199,10 +199,15 @@ func (c *Client) invalidateCaches(pageID uintptr, requestAddress string) []byte 
 			go c.makeInvalidCopyset(pageID, clientAddr)
 		}
 	}
+	log.Println("invalidating myself(owner)", c.address)
+	args := InvalidateArgs{Addr: pageID, NewAccess: 0, ReturnPage: true}
+	reply := InvalidateReply{}
+	c.ChangeAccess(&args, &reply)
+
 	// Make the owner, or the current client invalid
 	c.prob_owner[pageID] = Owner{OwnerAddr: requestAddress, AccessType: 2}
 	c.owns_page[pageID] = false
-	return nil
+	return reply.Data
 }
 
 func (c *Client) makeInvalidCopyset(addr uintptr, clientAddr string) {
