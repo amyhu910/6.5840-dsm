@@ -51,7 +51,7 @@ void setup_matmul(int num_pages, int index, int total_servers) {
         create_pages(num_pages);
         matrixA = (int *)p;
         matrixB = (int *)(p + PAGE_SIZE * 4);
-        matrixC = (int *f)(p + PAGE_SIZE * 8);
+        matrixC = (int *)(p + PAGE_SIZE * 8);
         if (p == MAP_FAILED) {
             fprintf(stderr, "Couldn't mmap memory; %s\n", strerror(errno));
             exit(EXIT_FAILURE);
