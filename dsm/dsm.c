@@ -74,6 +74,9 @@ void setup_handler() {
 }
 void make_all_pages_accesible(int num_pages) {
     mprotect(p, num_pages * PAGE_SIZE, PROT_READ | PROT_WRITE);
+    for (int i = 0; i < num_pages; i++) {
+        *(p+i*PAGE_SIZE) = i;
+    }
 }
 
 void create_pages(int num_pages) {
@@ -101,7 +104,7 @@ setup(int num_pages, int index, int total_servers) {
 
 void test_one_client(int num_pages, int index, int total_servers) {
     printf("Testing one client\n");
-    if (index == 0) {
+    if (index == 1) {
         test_legal_read(num_pages, index, total_servers);
         test_legal_write(num_pages, index, total_servers);
         // test_illegal_read(num_pages, index, total_servers);
