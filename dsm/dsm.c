@@ -72,6 +72,9 @@ void setup_handler() {
         exit(EXIT_FAILURE);
     }
 }
+void make_all_pages_accesible(int num_pages) {
+    mprotect(p, num_pages * PAGE_SIZE, PROT_READ | PROT_WRITE);
+}
 
 void create_pages(int num_pages) {
     p = mmap(NULL, num_pages * PAGE_SIZE, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -89,18 +92,10 @@ setup(int num_pages, int index, int total_servers) {
     // map all pages as PROT_NONE
     printf("Mapping all pages as PROT_NONE\n");
     create_pages(num_pages);
-
-    int curpage = (int)floor((index / (double)total_servers) * num_pages);
-    int nextpage = (int)floor(((index + 1) / (double)total_servers) * num_pages);
-
-    printf("Setting up pages %i through %i with read write permissions\n", curpage, nextpage);
-    for (int i = curpage; i < nextpage; i++) {
-        // set up the page at index to be read/write
-        int* ptr = (int*)(p + i * PAGE_SIZE);
-
-        // Dereference the pointer to write the value
-        *ptr = index;
-        printf("Setting page %p: %d\n", p + i * PAGE_SIZE, *ptr);
+    
+    // Give client 0 initial ownership of all pages
+    if (index == 0) {
+        make_all_pages_accesible(num_pages);
     }
 }
 

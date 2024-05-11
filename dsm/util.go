@@ -57,7 +57,7 @@ type InvalidateReply struct {
 	Data []byte
 }
 
-var default_owner_address string = "128.52.138.193"
+var default_owner_address string = "128.52.138.25"
 
 type DReadWriteArgs struct {
 	ClientAddress string

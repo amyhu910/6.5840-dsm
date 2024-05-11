@@ -7,6 +7,7 @@
 
 extern char *p;
 void create_pages(int num_pages);
+void make_all_pages_accesible(int num_pages);
 void change_access(uintptr_t addr, int NEW_PROT);
 void *get_page(uintptr_t addr);
 void set_page(uintptr_t addr, void *page_copy);
