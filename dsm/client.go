@@ -178,7 +178,7 @@ func (c *Client) DistributedHandleReadWrite(args *DReadWriteArgs, reply *DReadWr
 
 func (c *Client) makeReadonlyOwner(addr uintptr) []byte {
 	log.Println("making myself(%v) into readonly owner", c.address)
-	args := InvalidateArgs{Addr: addr, NewAccess: 1, ReturnPage: false}
+	args := InvalidateArgs{Addr: addr, NewAccess: 1, ReturnPage: true}
 	reply := InvalidateReply{}
 	ok := c.ChangeAccess(&args, &reply)
 	if ok != nil {
