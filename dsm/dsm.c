@@ -74,9 +74,6 @@ void setup_handler() {
 }
 void make_all_pages_accesible(int num_pages) {
     mprotect(p, num_pages * PAGE_SIZE, PROT_READ | PROT_WRITE);
-    for (int i = 0; i < num_pages; i++) {
-        *(p+i*PAGE_SIZE) = i;
-    }
 }
 
 void create_pages(int num_pages) {
@@ -84,6 +81,10 @@ void create_pages(int num_pages) {
     if (p == MAP_FAILED) {
         fprintf(stderr, "Couldn't mmap memory; %s\n", strerror(errno));
         exit(EXIT_FAILURE);
+    }
+    make_all_pages_accesible(num_pages)
+    for (int i = 0; i < num_pages; i++) {
+        *(p+i*PAGE_SIZE) = i;
     }
 }
 

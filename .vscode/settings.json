@@ -4,6 +4,8 @@
         "variant": "c",
         "chrono": "c",
         "mman.h": "c",
-        "stdint.h": "c"
+        "stdint.h": "c",
+        "string": "c",
+        "iosfwd": "c"
     }
 }

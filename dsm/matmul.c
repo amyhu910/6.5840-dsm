@@ -25,8 +25,8 @@ void setup_matmul(int num_pages, int index, int total_servers) {
     setup_handler();
 
     // map all pages as PROT_READ | PROT_WRITE
-    if (index == 0) {
-        printf("Mapping all pages as PROT_READ | PROT_WRITE\n");
+    if (index == 1) {
+        // printf("Mapping all pages as PROT_READ | PROT_WRITE\n");
         create_pages(num_pages);
 
         matrixA = (int *)p;
@@ -47,8 +47,9 @@ void setup_matmul(int num_pages, int index, int total_servers) {
         printf("Matrix B:\n");
         print_matrix(ROW_B, COL_B, matrixB);
     } else {
-        printf("Mapping all pages as PROT_NONE\n");
+        // printf("Mapping all pages as PROT_NONE\n");
         create_pages(num_pages);
+        make_all_pages_accesible();
         matrixA = (int *)p;
         matrixB = (int *)(p + PAGE_SIZE * 4);
         matrixC = (int *)(p + PAGE_SIZE * 8);
