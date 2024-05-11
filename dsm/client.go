@@ -28,10 +28,12 @@ var PageSize = syscall.Getpagesize()
 const port = ":1234"
 
 type Client struct {
-	address string
-	dead    int32 // for testing
-	mu      sync.Mutex
-	ready   bool
+	address     string
+	dead        int32 // for testing
+	mu          sync.Mutex
+	ready       bool
+	num_conns   int
+	num_servers int
 
 	prob_owner map[uintptr]Owner
 	copyset    map[uintptr]map[string]int
@@ -270,15 +272,23 @@ func (c *Client) initializeRPC() {
 		if err != nil {
 			log.Fatal("accept error:", err)
 		}
+		c.mu.Lock()
+		c.num_conns++
+		if c.num_conns == c.num_servers {
+			c.ready = true
+		}
+		c.mu.Unlock()
+
 		go rpc.ServeConn(conn)
 	}
 }
 
 func ClientSetup(numpages int, index int, address string, numservers int) {
 	MakeClient(numpages, address)
+	client.num_servers = numservers
 
 	C.setup(C.int(numpages), C.int(index), C.int(numservers))
-	C.test_one_client(C.int(numpages), C.int(index), C.int(numservers))
+	//C.test_one_client(C.int(numpages), C.int(index), C.int(numservers))
 	/*
 		for client.killed() == false {
 			time.Sleep(time.Second)
@@ -287,20 +297,22 @@ func ClientSetup(numpages int, index int, address string, numservers int) {
 				break
 			}
 		}
-
-		C.setup_matmul(C.int(numpages), C.int(index), C.int(numservers))
-
-		for client.killed() == false {
-			time.Sleep(time.Second)
-			if client.ready {
-				C.multiply_matrices(C.int(index), C.int(numservers))
-				break
-			}
-		}
 	*/
+
+	C.setup_matmul(C.int(numpages), C.int(index), C.int(numservers))
+
 	for client.killed() == false {
 		time.Sleep(time.Second)
+		if client.ready {
+			C.multiply_matrices(C.int(index), C.int(numservers))
+			break
+		}
 	}
+	/*
+		for client.killed() == false {
+			time.Sleep(time.Second)
+		}
+	*/
 	time.Sleep(time.Second)
 }
 
