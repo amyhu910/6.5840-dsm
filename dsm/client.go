@@ -247,6 +247,7 @@ func (c *Client) initialize(numpages int, address string) {
 	c.prob_owner = make(map[uintptr]Owner)
 	c.owns_page = make(map[uintptr]bool)
 	c.locks = make(map[uintptr]*sync.Mutex)
+	c.copyset = make(map[uintptr]map[string]int)
 	for i := 0; i < numpages; i++ {
 		c.prob_owner[uintptr(i*PageSize)] = Owner{OwnerAddr: default_owner_address, AccessType: 2}
 		c.owns_page[uintptr(i*PageSize)] = c.address == default_owner_address
