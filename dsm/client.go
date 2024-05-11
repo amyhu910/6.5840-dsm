@@ -101,7 +101,7 @@ func (c *Client) handleWrite(addr uintptr) {
 	}
 	// write to page
 	C.set_page(C.uintptr_t(addr), C.CBytes(ownerReply.Data))
-	ok = call(ownerAddr, "Central.HandleConfirmation", &ConfirmationArgs{ClientAddress: c.address, Addr: addr}, &Reply{})
+	ok = call(ownerAddr, "Client.HandleConfirmation", &ConfirmationArgs{ClientAddress: c.address, Addr: addr}, &Reply{})
 
 	// Identify self as the new owner
 	c.prob_owner[addr] = Owner{OwnerAddr: c.address, AccessType: 2}
@@ -129,7 +129,7 @@ func (c *Client) DistributedHandleReadWrite(args *DReadWriteArgs, reply *DReadWr
 		log.Println("prob_owner", c.prob_owner[args.Addr])
 		log.Println("copyset", c.copyset)
 		if args.Access == 1 {
-			log.Println("central handling read on go side", args.Addr, args.ClientAddress)
+			log.Println("client handling read on go side", args.Addr, args.ClientAddress)
 			// make owner readonly
 			if _, ok := c.copyset[args.Addr]; !ok {
 				c.copyset[args.Addr] = make(map[string]int)
@@ -145,7 +145,7 @@ func (c *Client) DistributedHandleReadWrite(args *DReadWriteArgs, reply *DReadWr
 			reply.Err = OK
 			reply.Owner = c.address
 		} else if args.Access == 2 {
-			log.Println("central handling write on go side", args.Addr, args.ClientAddress)
+			log.Println("client handling write on go side", args.Addr, args.ClientAddress)
 			// invalidate all pages and return data
 			delete(c.copyset[args.Addr], args.ClientAddress)
 			reply.Data = c.invalidateCaches(args.Addr, args.ClientAddress)
@@ -278,26 +278,27 @@ func (c *Client) initializeRPC() {
 func ClientSetup(numpages int, index int, address string, numservers int) {
 	MakeClient(numpages, address)
 
-	// C.setup(C.int(numpages), C.int(index), C.int(numservers))
-	// C.test_one_client(C.int(numpages), C.int(index), C.int(numservers))
-
-	// for client.killed() == false {
-	// 	time.Sleep(time.Second)
-	// 	if client.ready {
-	// 		C.test_concurrent_clients(C.int(numpages), C.int(index), C.int(numservers))
-	// 		break
-	// 	}
-	// }
-
-	C.setup_matmul(C.int(numpages), C.int(index), C.int(numservers))
-
-	for client.killed() == false {
-		time.Sleep(time.Second)
-		if client.ready {
-			C.multiply_matrices(C.int(index), C.int(numservers))
-			break
+	C.setup(C.int(numpages), C.int(index), C.int(numservers))
+	C.test_one_client(C.int(numpages), C.int(index), C.int(numservers))
+	/*
+		for client.killed() == false {
+			time.Sleep(time.Second)
+			if client.ready {
+				C.test_concurrent_clients(C.int(numpages), C.int(index), C.int(numservers))
+				break
+			}
 		}
-	}
+
+		C.setup_matmul(C.int(numpages), C.int(index), C.int(numservers))
+
+		for client.killed() == false {
+			time.Sleep(time.Second)
+			if client.ready {
+				C.multiply_matrices(C.int(index), C.int(numservers))
+				break
+			}
+		}
+	*/
 	for client.killed() == false {
 		time.Sleep(time.Second)
 	}
