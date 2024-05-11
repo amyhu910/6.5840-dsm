@@ -74,9 +74,6 @@ void setup_handler() {
 }
 void make_all_pages_accesible(int num_pages) {
     mprotect(p, num_pages * PAGE_SIZE, PROT_READ | PROT_WRITE);
-    for (int i = 0; i < num_pages; i++) {
-        *(p+i*PAGE_SIZE) = i;
-    }
 }
 
 void create_pages(int num_pages) {
@@ -99,6 +96,9 @@ setup(int num_pages, int index, int total_servers) {
     // Give client 0 initial ownership of all pages
     if (index == 0) {
         make_all_pages_accesible(num_pages);
+        for (int i = 0; i < num_pages; i++) {
+            *(p+i*PAGE_SIZE) = i;
+        }
     }
 }
 
