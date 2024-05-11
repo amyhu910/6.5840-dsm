@@ -25,7 +25,7 @@ void setup_matmul(int num_pages, int index, int total_servers) {
     setup_handler();
 
     // map all pages as PROT_READ | PROT_WRITE
-    if (index == 1) {
+    if (index == 0) {
         printf("Mapping all pages as PROT_READ | PROT_WRITE\n");
         create_pages(num_pages);
 
