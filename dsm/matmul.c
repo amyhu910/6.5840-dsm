@@ -69,6 +69,7 @@ void print_matrix(int rows, int cols, int *matrix) {
 }
 
 void multiply_matrices(int index, int total_servers) {
+    printf("multiplying matrices\n");
     int i, j, k;
     int start = (int)floor((index / (double)total_servers) * ROW_A);
     int end = (int)floor(((index + 1) / (double)total_servers) * ROW_A);
