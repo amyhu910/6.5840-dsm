@@ -180,14 +180,9 @@ func (c *Client) makeReadonlyOwner(addr uintptr) []byte {
 	log.Println("making myself(%v) into readonly owner", c.address)
 	args := InvalidateArgs{Addr: addr, NewAccess: 1, ReturnPage: true}
 	reply := InvalidateReply{}
-	ok := c.ChangeAccess(&args, &reply)
-	if ok != nil {
-		c.prob_owner[addr] = Owner{OwnerAddr: c.address, AccessType: 1}
-		return reply.Data
-	} else {
-		log.Printf("Could not change owner access to readonly and get data\n")
-		return nil
-	}
+	c.ChangeAccess(&args, &reply)
+	c.prob_owner[addr] = Owner{OwnerAddr: c.address, AccessType: 1}
+	return reply.Data
 }
 
 func (c *Client) invalidateCaches(pageID uintptr, requestAddress string) []byte {
