@@ -34,11 +34,11 @@ func main() {
 			if err != nil {
 				log.Fatal("could not parse num pages", err)
 			}
-			central := os.Args[i+4]
-			dsm.ClientSetup(numpages, index, numservers, central)
+			address := os.Args[i+4]
+			dsm.ClientSetup(numpages, index, address, numservers)
 		} else if args == "-h" {
 			fmt.Println("If you want to run a central server, use the -c flag followed by numpages and then the addresses of the clients.")
-			fmt.Println("If you want to run a client, use the -p flag followed by the index of the client, number of servers, numpages, and the address of the central server.")
+			fmt.Println("If you want to run a client, use the -p flag followed by the index of the client, number of servers, numpages, and the address of the current server.")
 		}
 	}
 }

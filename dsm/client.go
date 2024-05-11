@@ -19,7 +19,8 @@ import (
 )
 
 const (
-	OK = "OK"
+	OK    = "OK"
+	ERROR = "Error"
 )
 
 var PageSize = syscall.Getpagesize()
@@ -27,11 +28,15 @@ var PageSize = syscall.Getpagesize()
 const port = ":1234"
 
 type Client struct {
-	central string
-	id      int
+	address string
 	dead    int32 // for testing
 	mu      sync.Mutex
 	ready   bool
+
+	prob_owner map[uintptr]Owner
+	copyset    map[uintptr]map[string]int
+	owns_page  map[uintptr]bool
+	locks      map[uintptr]*sync.Mutex
 }
 
 func (c *Client) Kill() {
@@ -42,12 +47,6 @@ func (c *Client) Kill() {
 func (c *Client) killed() bool {
 	z := atomic.LoadInt32(&c.dead)
 	return z == 1
-}
-
-func (c *Client) AllClientsRegistered(args *Args, reply *Reply) error {
-	log.Println("all clients registered")
-	c.ready = true
-	return nil
 }
 
 var client *Client
@@ -65,28 +64,22 @@ func HandleRead(addr C.uintptr_t) {
 
 func (c *Client) handleRead(addr uintptr) {
 	log.Println("handling read on go side", addr)
-	ownerReply := &ReadWriteReply{}
+	ownerReply := &DReadWriteReply{}
 	// get owner of page
-	ok := call(c.central, "Central.HandleReadWrite", &ReadWriteArgs{ClientID: c.id, Addr: addr, Access: 1}, ownerReply)
+	// Contact last owner
+	ownerAddr := c.prob_owner[addr].OwnerAddr
+	ok := call(ownerAddr, "Client.DistributedHandleReadWrite", &DReadWriteArgs{ClientAddress: c.address, Addr: addr, Access: 1}, ownerReply)
 	if !ok {
 		log.Println("error could not get owner of page")
 	}
-	if ownerReply.HadOwner {
-		pageReply := &PageRequestReply{}
-		// get page data
-		ok = call(ownerReply.Owner, "Client.HandlePageRequest", &PageRequestArgs{Addr: addr, RequestType: 1}, pageReply)
-		if !ok {
-			log.Println("error could not get page data")
-		}
-		// write to page
-		C.set_page(C.uintptr_t(addr), C.CBytes(pageReply.Data))
-	} else {
-		var empty_page []byte
-		C.set_page(C.uintptr_t(addr), C.CBytes(empty_page))
-	}
+	C.set_page(C.uintptr_t(addr), C.CBytes(ownerReply.Data))
 	C.change_access(C.uintptr_t(addr), 1)
 
-	ok = call(c.central, "Central.HandleConfirmation", &ConfirmationArgs{ClientID: c.id, Addr: addr}, &Reply{})
+	if ownerReply.Owner != ownerAddr {
+		c.prob_owner[addr] = Owner{OwnerAddr: ownerReply.Owner, AccessType: 1}
+	}
+
+	ok = call(ownerAddr, "Client.HandleConfirmation", &ConfirmationArgs{ClientAddress: c.address, Addr: addr}, &Reply{})
 }
 
 //export HandleWrite
@@ -96,9 +89,10 @@ func HandleWrite(addr C.uintptr_t) {
 
 func (c *Client) handleWrite(addr uintptr) {
 	log.Println("handling write on go side", addr)
-	ownerReply := &ReadWriteReply{}
-	// invalidate caches and load page
-	ok := call(c.central, "Central.HandleReadWrite", &ReadWriteArgs{ClientID: c.id, Addr: addr, Access: 2}, ownerReply)
+	ownerReply := &DReadWriteReply{}
+	// Contact last owner
+	ownerAddr := c.prob_owner[addr].OwnerAddr
+	ok := call(ownerAddr, "Client.DistributedHandleReadWrite", &DReadWriteArgs{ClientAddress: c.address, Addr: addr, Access: 2}, ownerReply)
 	if !ok {
 		return
 	}
@@ -107,7 +101,17 @@ func (c *Client) handleWrite(addr uintptr) {
 	}
 	// write to page
 	C.set_page(C.uintptr_t(addr), C.CBytes(ownerReply.Data))
-	ok = call(c.central, "Central.HandleConfirmation", &ConfirmationArgs{ClientID: c.id, Addr: addr}, &Reply{})
+	ok = call(ownerAddr, "Central.HandleConfirmation", &ConfirmationArgs{ClientAddress: c.address, Addr: addr}, &Reply{})
+
+	// Identify self as the new owner
+	c.prob_owner[addr] = Owner{OwnerAddr: c.address, AccessType: 2}
+	c.owns_page[addr] = true
+	c.copyset[addr] = make(map[string]int)
+}
+
+func (c *Client) HandleConfirmation(args *ConfirmationArgs, reply *Reply) error {
+	c.locks[args.Addr].Unlock()
+	return nil
 }
 
 func (c *Client) ChangeAccess(args *InvalidateArgs, reply *InvalidateReply) error {
@@ -119,8 +123,101 @@ func (c *Client) ChangeAccess(args *InvalidateArgs, reply *InvalidateReply) erro
 	return nil
 }
 
-func (c *Central) DistributedHandleReadWrite(args *DReadWriteArgs, reply *DReadWriteReply) error {
+func (c *Client) DistributedHandleReadWrite(args *DReadWriteArgs, reply *DReadWriteReply) error {
+	if c.owns_page[args.Addr] {
+		c.locks[args.Addr].Lock()
+		log.Println("prob_owner", c.prob_owner[args.Addr])
+		log.Println("copyset", c.copyset)
+		if args.Access == 1 {
+			log.Println("central handling read on go side", args.Addr, args.ClientAddress)
+			// make owner readonly
+			if _, ok := c.copyset[args.Addr]; !ok {
+				c.copyset[args.Addr] = make(map[string]int)
+			}
+			reply.Data = c.makeReadonlyOwner(args.Addr)
+			if reply.Data != nil {
+				reply.Err = OK
+			} else {
+				reply.Err = ERROR
+			}
+			c.copyset[args.Addr][args.ClientAddress] = 1
+			c.owns_page[args.Addr] = true // TODO: Prob redundant, should already be true
+			reply.Err = OK
+			reply.Owner = c.address
+		} else if args.Access == 2 {
+			log.Println("central handling write on go side", args.Addr, args.ClientAddress)
+			// invalidate all pages and return data
+			delete(c.copyset[args.Addr], args.ClientAddress)
+			reply.Data = c.invalidateCaches(args.Addr, args.ClientAddress)
+			reply.Owner = c.address
+			// wait for invalidation to finish
+			for len(c.copyset[args.Addr]) > 0 {
+			}
+			reply.Err = OK
+		}
+		log.Println("done handling")
+		return nil
+	} else {
+		// Forwarding logic here
+		log.Println("Client %v is not the owner. Forwarding to %v\n", c.address, c.prob_owner[args.Addr].OwnerAddr)
+		prob_owner := c.prob_owner[args.Addr]
+		ok := call(prob_owner.OwnerAddr, "Client.DistributedHandleReadWrite", args, reply)
+		if !ok {
+			log.Println("Issue forwarding.")
+		}
+		if reply.Owner != prob_owner.OwnerAddr {
+			if args.Access == 1 {
+				c.prob_owner[args.Addr] = Owner{OwnerAddr: reply.Owner, AccessType: 1}
+			} else {
+				c.prob_owner[args.Addr] = Owner{OwnerAddr: args.ClientAddress, AccessType: 2}
+			}
+		}
+	}
 	return nil
+}
+
+func (c *Client) makeReadonlyOwner(addr uintptr) []byte {
+	log.Println("making myself(%v) into readonly owner", c.address)
+	args := InvalidateArgs{Addr: addr, NewAccess: 1, ReturnPage: false}
+	reply := InvalidateReply{}
+	ok := c.ChangeAccess(&args, &reply)
+	if ok != nil {
+		c.prob_owner[addr] = Owner{OwnerAddr: c.address, AccessType: 1}
+		return reply.Data
+	} else {
+		log.Printf("Could not change owner access to readonly and get data\n")
+		return nil
+	}
+}
+
+func (c *Client) invalidateCaches(pageID uintptr, requestAddress string) []byte {
+	log.Println("Invalidating Caches")
+	copyset, ok := c.copyset[pageID]
+	if ok {
+		for clientAddr, _ := range copyset {
+			if clientAddr == requestAddress {
+				continue
+			}
+			log.Println(clientAddr)
+			go c.makeInvalidCopyset(pageID, clientAddr)
+		}
+	}
+	// Make the owner, or the current client invalid
+	c.prob_owner[pageID] = Owner{OwnerAddr: requestAddress, AccessType: 2}
+	c.owns_page[pageID] = false
+	return nil
+}
+
+func (c *Client) makeInvalidCopyset(addr uintptr, clientAddr string) {
+	log.Println("make invalid copyset", clientAddr)
+	args := InvalidateArgs{Addr: addr, NewAccess: 0, ReturnPage: false}
+	reply := InvalidateReply{}
+	ok := false
+	for !ok {
+		// Wait until expires
+		ok = call(clientAddr, "Client.ChangeAccess", &args, &reply)
+	}
+	delete(c.copyset[addr], clientAddr)
 }
 
 func call(addr string, rpcname string, args interface{}, reply interface{}) bool {
@@ -144,21 +241,19 @@ func call(addr string, rpcname string, args interface{}, reply interface{}) bool
 	return false
 }
 
-func (c *Client) initialize(centralAddr string, me int) {
+func (c *Client) initialize(numpages int, address string) {
 	go c.initializeRPC()
-	c.central = centralAddr
-	c.id = me
-	c.mu = sync.Mutex{}
-	reply := &RegisterReply{}
-	ok := call(c.central, "Central.RegisterClient", &RegisterArgs{ClientID: c.id}, reply)
-	if !ok {
-		log.Println("error could not register client")
+	c.address = address
+	for i := 0; i < numpages; i++ {
+		c.prob_owner[uintptr(i*PageSize)] = Owner{OwnerAddr: default_owner_address, AccessType: 2}
+		c.owns_page[uintptr(i*PageSize)] = c.address == default_owner_address
+		c.locks[uintptr(i*PageSize)] = &sync.Mutex{}
 	}
 }
 
-func MakeClient(centralAddr string, me int) {
+func MakeClient(numpages int, address string) {
 	c := &Client{}
-	c.initialize(centralAddr, me)
+	c.initialize(numpages, address)
 	client = c
 }
 
@@ -180,8 +275,8 @@ func (c *Client) initializeRPC() {
 	}
 }
 
-func ClientSetup(numpages int, index int, numservers int, central string) {
-	MakeClient(central, index)
+func ClientSetup(numpages int, index int, address string, numservers int) {
+	MakeClient(numpages, address)
 
 	// C.setup(C.int(numpages), C.int(index), C.int(numservers))
 	// C.test_one_client(C.int(numpages), C.int(index), C.int(numservers))

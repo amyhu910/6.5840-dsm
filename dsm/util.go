@@ -9,8 +9,8 @@ type Reply struct {
 }
 
 type ConfirmationArgs struct {
-	ClientID int
-	Addr     uintptr
+	ClientAddress string
+	Addr          uintptr
 }
 
 type RegisterArgs struct {
@@ -57,19 +57,17 @@ type InvalidateReply struct {
 	Data []byte
 }
 
-var default_owner_id int = 0
-var default_owner_addr string = "123"
+var default_owner_address string = "128.52.138.193"
 
 type DReadWriteArgs struct {
-	ClientID int
-	Addr     uintptr
-	Access   int
+	ClientAddress string
+	Addr          uintptr
+	Access        int
 }
 
 type DReadWriteReply struct {
-	Err      Err
-	HadOwner bool
-	Owner    string
-	Data     []byte
+	Err   Err
+	Owner string
+	Data  []byte
 	// Lease Lease
 }
